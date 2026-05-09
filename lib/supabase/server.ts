@@ -3,16 +3,16 @@ import { auth } from "@clerk/nextjs/server";
 
 export async function createServerClient() {
   const { getToken } = await auth();
-  const supabaseToken = await getToken({ template: "supabase" });
+  // Uses Clerk's default session token (no custom template needed) —
+  // Supabase validates it via the Clerk third-party auth integration.
+  const token = await getToken();
 
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       global: {
-        headers: supabaseToken
-          ? { Authorization: `Bearer ${supabaseToken}` }
-          : {},
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       },
     }
   );
