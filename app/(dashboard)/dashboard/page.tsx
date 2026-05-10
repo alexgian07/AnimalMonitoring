@@ -41,8 +41,8 @@ export default async function DashboardPage() {
     avgWeightMap[loc.id] = weights.length ? weights.reduce((a, b) => a + b, 0) / weights.length : null;
   }
 
-  const totalAlive = Object.values(aliveMap).reduce((a: any, b: any) => a + Number(b), 0);
-  const totalCulled = Object.values(cullMap).reduce((a: any, b: any) => a + Number(b), 0);
+  const totalAlive: number = Object.values(aliveMap).reduce<number>((a, b) => a + Number(b), 0);
+  const totalCulled: number = Object.values(cullMap).reduce<number>((a, b) => a + Number(b), 0);
 
   return (
     <div className="p-8">

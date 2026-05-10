@@ -37,7 +37,7 @@ export default function Sidebar({ role }: { role: string | null }) {
         ))}
       </nav>
       <div className="px-5 py-4 border-t border-gray-800 flex items-center gap-3">
-        <UserButton afterSignOutUrl="/sign-in" />
+        <UserButton />
         <span className="text-xs text-gray-500 capitalize">{role ?? "viewer"}</span>
       </div>
     </aside>

@@ -12,7 +12,7 @@ export default async function AdminPage() {
 
   const serviceClient = createServiceClient();
   const { data: profiles } = await serviceClient.from("profiles").select("*").order("created_at");
-  const { data: locations } = await serviceClient.from("locations").select("id, name");
+  const { data: locations } = await serviceClient.from("locations").select("*");
 
   return (
     <div className="p-8">
