@@ -216,6 +216,17 @@ export const t = {
     aviagenHumid: "Υγρ.",
   },
 
+  // Barn map view
+  barn: {
+    navLabel: "Στάβλος",
+    title: "Όψη Στάβλου",
+    subtitle: "Οπτική απεικόνιση όλων των κελιών και των ζώων. Πατήστε σε ένα ζώο για λεπτομέρειες.",
+    leftSide: "Αριστερά (Κελιά 1–4)",
+    rightSide: "Δεξιά (Κελιά 5–8)",
+    emptyCell: "Άδειο κελί",
+    aliveCount: (n: number) => `${n} ζωντανές`,
+  },
+
   // Excel I/O
   excel: {
     export: "Εξαγωγή σε Excel",
