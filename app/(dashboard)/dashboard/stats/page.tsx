@@ -1,6 +1,6 @@
 import { createServerClient } from "@/lib/supabase/server";
 import MultiGroupChart from "@/components/charts/MultiGroupChart";
-import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
+import ExportButton from "@/components/ExportButton";
 import { t } from "@/lib/i18n";
 import { breedingWeek, aviagenForWeek } from "@/lib/aviagen";
 
@@ -76,9 +76,12 @@ export default async function StatsPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white mb-1">{t.stats.title}</h1>
-        <p className="text-gray-400 text-sm">{t.stats.subtitle}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-1">{t.stats.title}</h1>
+          <p className="text-gray-400 text-sm">{t.stats.subtitle}</p>
+        </div>
+        <ExportButton />
       </div>
 
       {/* Weight */}

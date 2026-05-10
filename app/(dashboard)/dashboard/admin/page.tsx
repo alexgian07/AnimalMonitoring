@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import AdminUsersTable from "@/components/AdminUsersTable";
 import SlaughterScheduleAdmin from "@/components/SlaughterScheduleAdmin";
+import ImportExcel from "@/components/ImportExcel";
 import { t } from "@/lib/i18n";
 
 export default async function AdminPage() {
@@ -22,6 +23,7 @@ export default async function AdminPage() {
       <p className="text-gray-400 text-sm mb-8">{t.admin.subtitle}</p>
       <AdminUsersTable profiles={profiles ?? []} locations={locations ?? []} />
       <SlaughterScheduleAdmin />
+      <ImportExcel />
     </div>
   );
 }

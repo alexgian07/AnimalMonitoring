@@ -216,6 +216,21 @@ export const t = {
     aviagenHumid: "Υγρ.",
   },
 
+  // Excel I/O
+  excel: {
+    export: "Εξαγωγή σε Excel",
+    exporting: "Εξαγωγή...",
+    importTitle: "Εισαγωγή από Excel",
+    importSubtitle: "Ανέβασμα αρχείου .xlsx (μόνο διαχειριστές). Τα αρχεία πρέπει να έχουν τα ίδια ονόματα στηλών με την εξαγωγή.",
+    chooseFile: "Επιλογή αρχείου",
+    upload: "Ανέβασμα",
+    uploading: "Ανέβασμα...",
+    summaryTitle: "Σύνοψη Εισαγωγής",
+    inserted: "καταχωρήθηκαν",
+    skipped: "παραλείφθηκαν",
+    errors: "Σφάλματα",
+  },
+
   // Tasks panel
   tasks: {
     today: "Σήμερα",
