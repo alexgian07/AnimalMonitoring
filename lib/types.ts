@@ -7,6 +7,8 @@ export interface Location {
   id: string;
   name: string;
   description: string | null;
+  position: number | null;
+  side: "left" | "right" | null;
   created_at: string;
 }
 

@@ -14,6 +14,8 @@ CREATE TABLE locations (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
   description TEXT,
+  position    INTEGER,                                   -- 1..8 ordering
+  side        TEXT CHECK (side IN ('left','right')),     -- left = 1..4, right = 5..8
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -183,12 +185,12 @@ CREATE POLICY "profiles_update_admin" ON profiles
 -- SEED: 8 default locations
 -- ============================================================
 
-INSERT INTO locations (name, description) VALUES
-  ('Pen A', 'North building, section 1'),
-  ('Pen B', 'North building, section 2'),
-  ('Pen C', 'South building, section 1'),
-  ('Pen D', 'South building, section 2'),
-  ('Pen E', 'East building, section 1'),
-  ('Pen F', 'East building, section 2'),
-  ('Pen G', 'West building, section 1'),
-  ('Pen H', 'West building, section 2');
+INSERT INTO locations (name, description, position, side) VALUES
+  ('Κελί 1', 'Αριστερή πλευρά', 1, 'left'),
+  ('Κελί 2', 'Αριστερή πλευρά', 2, 'left'),
+  ('Κελί 3', 'Αριστερή πλευρά', 3, 'left'),
+  ('Κελί 4', 'Αριστερή πλευρά', 4, 'left'),
+  ('Κελί 5', 'Δεξιά πλευρά',    5, 'right'),
+  ('Κελί 6', 'Δεξιά πλευρά',    6, 'right'),
+  ('Κελί 7', 'Δεξιά πλευρά',    7, 'right'),
+  ('Κελί 8', 'Δεξιά πλευρά',    8, 'right');

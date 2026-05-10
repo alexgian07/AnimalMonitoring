@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 export default async function DashboardPage() {
   const supabase = await createServerClient();
 
-  const { data: locations } = await supabase.from("locations").select("*").order("name");
+  const { data: locations } = await supabase.from("locations").select("*").order("position");
 
   const { data: aliveCounts } = await supabase
     .from("turkeys")
@@ -58,35 +58,43 @@ export default async function DashboardPage() {
         <StatCard icon={<TrendingUp size={20} />} label={t.overview.pensMonitored} value={(locations ?? []).length} color="amber" />
       </div>
 
-      {/* Location grid */}
+      {/* Location grid: pens 1-4 left, 5-8 right */}
       <h2 className="text-lg font-semibold text-white mb-4">{t.overview.penStatus}</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {(locations ?? []).map((loc: any) => (
-          <Link key={loc.id} href={`/dashboard/locations/${loc.id}`}>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-emerald-600 transition-colors cursor-pointer">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-white">{loc.name}</span>
-                <span className="text-xs bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded-full">
-                  {aliveMap[loc.id] ?? 0} {t.overview.alive}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mb-4 truncate">{loc.description ?? t.common.dash}</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-gray-500">{t.overview.culled}</div>
-                  <div className="text-red-400 font-medium">{cullMap[loc.id] ?? 0}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">{t.overview.avgWeight}</div>
-                  <div className="text-white font-medium">{formatWeight(avgWeightMap[loc.id] ?? null)}</div>
-                </div>
-                <div className="col-span-2">
-                  <div className="text-gray-500">{t.overview.lastRecorded}</div>
-                  <div className="text-gray-300">{formatDate(lastMeasMap[loc.id] ?? null)}</div>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {(["left", "right"] as const).map(side => (
+          <div key={side}>
+            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">
+              {side === "left" ? "Αριστερά (Κελιά 1–4)" : "Δεξιά (Κελιά 5–8)"}
             </div>
-          </Link>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(locations ?? []).filter((l: any) => l.side === side).map((loc: any) => (
+                <Link key={loc.id} href={`/dashboard/locations/${loc.id}`}>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-emerald-600 transition-colors cursor-pointer h-full">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-white">{loc.name}</span>
+                      <span className="text-xs bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded-full">
+                        {aliveMap[loc.id] ?? 0} {t.overview.alive}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <div className="text-gray-500">{t.overview.culled}</div>
+                        <div className="text-red-400 font-medium">{cullMap[loc.id] ?? 0}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500">{t.overview.avgWeight}</div>
+                        <div className="text-white font-medium">{formatWeight(avgWeightMap[loc.id] ?? null)}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-gray-500">{t.overview.lastRecorded}</div>
+                        <div className="text-gray-300">{formatDate(lastMeasMap[loc.id] ?? null)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>

@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n";
 export default async function LocationsPage() {
   const supabase = await createServerClient();
 
-  const { data: locations } = await supabase.from("locations").select("*").order("name");
+  const { data: locations } = await supabase.from("locations").select("*").order("position");
   const { data: turkeys } = await supabase.from("turkeys").select("id, location_id, status");
   const { data: measurements } = await supabase
     .from("measurements")
