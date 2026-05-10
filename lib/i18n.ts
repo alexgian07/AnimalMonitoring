@@ -138,6 +138,33 @@ export const t = {
     noUsers: "Δεν υπάρχουν χρήστες ακόμα. Εμφανίζονται μετά την πρώτη σύνδεσή τους.",
   },
 
+  // Daily form (ΗΜΕΡΗΣΙΟ)
+  daily: {
+    navLabel: "Ημερήσιο",
+    title: "Ημερήσιες Καταγραφές",
+    subtitle: "Καταγραφή θερμοκρασιών, υγρασίας και θνησιμότητας ανά κελί",
+    formTitle: "Νέα Καταγραφή",
+    cell: "Κελί *",
+    selectCell: "Επιλέξτε κελί...",
+    date: "Ημερομηνία *",
+    tempMin: "Ελάχιστη °C",
+    tempMax: "Μέγιστη °C",
+    tempMorning: "Πρωί °C",
+    tempMidday: "Μεσημέρι °C",
+    tempEvening: "Απόγευμα °C",
+    humidity: "Υγρασία %",
+    mortality: "Θνησιμότητα (νεκρά)",
+    sickCount: "Άρρωστα / απομονωμένα",
+    notes: "Σημειώσεις",
+    submit: "Αποθήκευση",
+    submitting: "Αποθηκεύεται...",
+    recentTitle: "Πρόσφατες Καταγραφές",
+    noRecords: "Δεν υπάρχουν καταγραφές ακόμα",
+    aviagenLabel: "Στόχος Aviagen",
+    aviagenTemp: "Θερμ.",
+    aviagenHumid: "Υγρ.",
+  },
+
   // Common
   common: {
     cancel: "Ακύρωση",
