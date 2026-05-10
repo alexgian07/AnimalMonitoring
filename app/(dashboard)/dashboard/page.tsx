@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MapPin, Bird, Scissors, TrendingUp } from "lucide-react";
 import { formatWeight, formatDate } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import TasksPanel from "@/components/TasksPanel";
 
 export default async function DashboardPage() {
   const supabase = await createServerClient();
@@ -50,6 +51,9 @@ export default async function DashboardPage() {
     <div className="p-8">
       <h1 className="text-2xl font-bold text-white mb-1">{t.overview.title}</h1>
       <p className="text-gray-400 text-sm mb-8">{t.overview.subtitle}</p>
+
+      {/* Tasks panel — today / tomorrow / next slaughter */}
+      <TasksPanel />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">

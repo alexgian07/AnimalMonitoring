@@ -201,6 +201,32 @@ export const t = {
     aviagenHumid: "Υγρ.",
   },
 
+  // Tasks panel
+  tasks: {
+    today: "Σήμερα",
+    tomorrow: "Αύριο",
+    nextSlaughter: "Επόμενη σφαγή",
+    thisWeek: "Αυτή η εβδομάδα",
+    nextWeek: "Επόμενη εβδομάδα",
+    noTasksToday: "Δεν υπάρχουν προγραμματισμένες εργασίες",
+    noUpcomingSlaughter: "Δεν έχει οριστεί επόμενη σφαγή",
+    daysAway: (n: number) => n === 0 ? "σήμερα" : n === 1 ? "αύριο" : `σε ${n} ημέρες`,
+    weekdays: ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"],
+    weekdaysShort: ["Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ", "Κυρ"],
+  },
+
+  // Slaughter schedule admin
+  slaughter: {
+    title: "Πρόγραμμα Σφαγών",
+    subtitle: "Διαχείριση επερχόμενων σφαγών",
+    addDate: "Προσθήκη Ημερομηνίας",
+    date: "Ημερομηνία *",
+    notes: "Σημειώσεις",
+    submit: "Αποθήκευση",
+    submitting: "Αποθηκεύεται...",
+    noEntries: "Δεν υπάρχουν προγραμματισμένες σφαγές",
+  },
+
   // Common
   common: {
     cancel: "Ακύρωση",
