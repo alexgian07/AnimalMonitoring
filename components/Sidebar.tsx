@@ -4,20 +4,25 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { LayoutDashboard, MapPin, ShieldCheck, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export default function Sidebar({ role }: { role: string | null }) {
   const pathname = usePathname();
   const nav = [
-    { href: "/dashboard",           label: "Overview",   icon: LayoutDashboard, show: true },
-    { href: "/dashboard/locations", label: "Locations",  icon: MapPin,          show: true },
-    { href: "/dashboard/stats",     label: "Statistics", icon: BarChart2,       show: true },
-    { href: "/dashboard/admin",     label: "Admin",      icon: ShieldCheck,     show: role === "admin" },
+    { href: "/dashboard",           label: t.nav.overview,  icon: LayoutDashboard, show: true },
+    { href: "/dashboard/locations", label: t.nav.locations, icon: MapPin,          show: true },
+    { href: "/dashboard/stats",     label: t.nav.stats,     icon: BarChart2,       show: true },
+    { href: "/dashboard/admin",     label: t.nav.admin,     icon: ShieldCheck,     show: role === "admin" },
   ];
+
+  const roleLabel = role
+    ? (t.role as Record<string, string>)[role] ?? role
+    : t.role.viewer;
 
   return (
     <aside className="w-56 shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
       <div className="px-6 py-5 border-b border-gray-800">
-        <span className="text-xl font-bold text-white">🦃 TurkeyLab</span>
+        <span className="text-xl font-bold text-white">{t.brand}</span>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {nav.filter(n => n.show).map(({ href, label, icon: Icon }) => (
@@ -38,7 +43,7 @@ export default function Sidebar({ role }: { role: string | null }) {
       </nav>
       <div className="px-5 py-4 border-t border-gray-800 flex items-center gap-3">
         <UserButton />
-        <span className="text-xs text-gray-500 capitalize">{role ?? "viewer"}</span>
+        <span className="text-xs text-gray-500">{roleLabel}</span>
       </div>
     </aside>
   );

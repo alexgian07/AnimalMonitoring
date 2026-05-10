@@ -17,7 +17,7 @@ export function formatTemp(c: number | null) {
 
 export function formatDate(dateStr: string | null) {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-GB", {
+  return new Date(dateStr).toLocaleDateString("el-GR", {
     day: "2-digit",
     month: "short",
     year: "numeric",

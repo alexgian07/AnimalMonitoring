@@ -3,6 +3,7 @@ import { LocationWithStats } from "@/lib/types";
 import Link from "next/link";
 import { MapPin, Bird, Scissors, TrendingUp } from "lucide-react";
 import { formatWeight, formatDate } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export default async function DashboardPage() {
   const supabase = await createServerClient();
@@ -46,19 +47,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-1">Research Overview</h1>
-      <p className="text-gray-400 text-sm mb-8">All pens at a glance</p>
+      <h1 className="text-2xl font-bold text-white mb-1">{t.overview.title}</h1>
+      <p className="text-gray-400 text-sm mb-8">{t.overview.subtitle}</p>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-        <StatCard icon={<MapPin size={20} />} label="Active Pens" value={(locations ?? []).length} color="blue" />
-        <StatCard icon={<Bird size={20} />} label="Alive Turkeys" value={totalAlive} color="emerald" />
-        <StatCard icon={<Scissors size={20} />} label="Culled Total" value={totalCulled} color="red" />
-        <StatCard icon={<TrendingUp size={20} />} label="Pens Monitored" value={(locations ?? []).length} color="amber" />
+        <StatCard icon={<MapPin size={20} />} label={t.overview.activePens} value={(locations ?? []).length} color="blue" />
+        <StatCard icon={<Bird size={20} />} label={t.overview.aliveTurkeys} value={totalAlive} color="emerald" />
+        <StatCard icon={<Scissors size={20} />} label={t.overview.culledTotal} value={totalCulled} color="red" />
+        <StatCard icon={<TrendingUp size={20} />} label={t.overview.pensMonitored} value={(locations ?? []).length} color="amber" />
       </div>
 
       {/* Location grid */}
-      <h2 className="text-lg font-semibold text-white mb-4">Pen Status</h2>
+      <h2 className="text-lg font-semibold text-white mb-4">{t.overview.penStatus}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {(locations ?? []).map((loc: any) => (
           <Link key={loc.id} href={`/dashboard/locations/${loc.id}`}>
@@ -66,21 +67,21 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between mb-3">
                 <span className="font-semibold text-white">{loc.name}</span>
                 <span className="text-xs bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded-full">
-                  {aliveMap[loc.id] ?? 0} alive
+                  {aliveMap[loc.id] ?? 0} {t.overview.alive}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mb-4 truncate">{loc.description ?? "—"}</p>
+              <p className="text-xs text-gray-500 mb-4 truncate">{loc.description ?? t.common.dash}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="text-gray-500">Culled</div>
+                  <div className="text-gray-500">{t.overview.culled}</div>
                   <div className="text-red-400 font-medium">{cullMap[loc.id] ?? 0}</div>
                 </div>
                 <div>
-                  <div className="text-gray-500">Avg weight</div>
+                  <div className="text-gray-500">{t.overview.avgWeight}</div>
                   <div className="text-white font-medium">{formatWeight(avgWeightMap[loc.id] ?? null)}</div>
                 </div>
                 <div className="col-span-2">
-                  <div className="text-gray-500">Last recorded</div>
+                  <div className="text-gray-500">{t.overview.lastRecorded}</div>
                   <div className="text-gray-300">{formatDate(lastMeasMap[loc.id] ?? null)}</div>
                 </div>
               </div>

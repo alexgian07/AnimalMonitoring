@@ -2,6 +2,7 @@ import { createServerClient, createServiceClient } from "@/lib/supabase/server";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import AdminUsersTable from "@/components/AdminUsersTable";
+import { t } from "@/lib/i18n";
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -16,8 +17,8 @@ export default async function AdminPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-1">Admin Panel</h1>
-      <p className="text-gray-400 text-sm mb-8">Manage users and their access</p>
+      <h1 className="text-2xl font-bold text-white mb-1">{t.admin.title}</h1>
+      <p className="text-gray-400 text-sm mb-8">{t.admin.subtitle}</p>
       <AdminUsersTable profiles={profiles ?? []} locations={locations ?? []} />
     </div>
   );

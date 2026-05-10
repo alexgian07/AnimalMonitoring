@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Profile, Location } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export default function AdminUsersTable({ profiles, locations }: { profiles: Profile[]; locations: Location[] }) {
   const [saving, setSaving] = useState<string | null>(null);
@@ -21,10 +22,10 @@ export default function AdminUsersTable({ profiles, locations }: { profiles: Pro
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
-            <th className="text-left px-5 py-3">User</th>
-            <th className="text-left px-5 py-3">Role</th>
-            <th className="text-left px-5 py-3">Location Access</th>
-            <th className="px-5 py-3">Actions</th>
+            <th className="text-left px-5 py-3">{t.admin.user}</th>
+            <th className="text-left px-5 py-3">{t.admin.role}</th>
+            <th className="text-left px-5 py-3">{t.admin.locationAccess}</th>
+            <th className="px-5 py-3">{t.admin.actions}</th>
           </tr>
         </thead>
         <tbody>
@@ -34,7 +35,7 @@ export default function AdminUsersTable({ profiles, locations }: { profiles: Pro
         </tbody>
       </table>
       {profiles.length === 0 && (
-        <div className="text-center py-12 text-gray-500">No users yet. Users appear here after their first login.</div>
+        <div className="text-center py-12 text-gray-500">{t.admin.noUsers}</div>
       )}
     </div>
   );
@@ -72,9 +73,9 @@ function UserRow({ profile, locations, saving, onUpdate }: {
           onChange={e => setRole(e.target.value as Profile["role"])}
           className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none"
         >
-          <option value="viewer">Viewer</option>
-          <option value="researcher">Researcher</option>
-          <option value="admin">Admin</option>
+          <option value="viewer">{t.role.viewer}</option>
+          <option value="researcher">{t.role.researcher}</option>
+          <option value="admin">{t.role.admin}</option>
         </select>
       </td>
       <td className="px-5 py-4">
@@ -85,7 +86,7 @@ function UserRow({ profile, locations, saving, onUpdate }: {
               allLocations ? "bg-emerald-600 border-emerald-600 text-white" : "border-gray-700 text-gray-400 hover:border-gray-500"
             }`}
           >
-            All
+            {t.admin.all}
           </button>
           {locations.map(loc => (
             <button
@@ -108,7 +109,7 @@ function UserRow({ profile, locations, saving, onUpdate }: {
           disabled={saving}
           className="text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
         >
-          {saving ? "Saving..." : "Save"}
+          {saving ? t.admin.saving : t.admin.save}
         </button>
       </td>
     </tr>

@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { MapPin, ChevronRight } from "lucide-react";
 import { formatWeight, formatDate } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export default async function LocationsPage() {
   const supabase = await createServerClient();
@@ -16,8 +17,8 @@ export default async function LocationsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-1">Locations</h1>
-      <p className="text-gray-400 text-sm mb-8">All 8 research pens</p>
+      <h1 className="text-2xl font-bold text-white mb-1">{t.locations.title}</h1>
+      <p className="text-gray-400 text-sm mb-8">{t.locations.subtitle}</p>
 
       <div className="space-y-3">
         {(locations ?? []).map((loc: any) => {
@@ -37,25 +38,25 @@ export default async function LocationsPage() {
                   </div>
                   <div>
                     <div className="font-semibold text-white">{loc.name}</div>
-                    <div className="text-xs text-gray-500">{loc.description ?? "—"}</div>
+                    <div className="text-xs text-gray-500">{loc.description ?? t.common.dash}</div>
                   </div>
                 </div>
                 <div className="hidden md:flex gap-8 text-sm">
                   <div className="text-center">
                     <div className="text-emerald-400 font-bold">{alive}</div>
-                    <div className="text-gray-500 text-xs">Alive</div>
+                    <div className="text-gray-500 text-xs">{t.overview.alive}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-red-400 font-bold">{culled}</div>
-                    <div className="text-gray-500 text-xs">Culled</div>
+                    <div className="text-gray-500 text-xs">{t.overview.culled}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-white font-bold">{formatWeight(avgWeight || null)}</div>
-                    <div className="text-gray-500 text-xs">Avg Weight</div>
+                    <div className="text-gray-500 text-xs">{t.overview.avgWeight}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-gray-300 font-bold">{formatDate(lastMeas?.measured_at ?? null)}</div>
-                    <div className="text-gray-500 text-xs">Last Record</div>
+                    <div className="text-gray-500 text-xs">{t.overview.lastRecorded}</div>
                   </div>
                 </div>
                 <ChevronRight size={18} className="text-gray-600 ml-6" />
