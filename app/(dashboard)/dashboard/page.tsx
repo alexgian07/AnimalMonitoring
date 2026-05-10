@@ -23,6 +23,7 @@ export default async function DashboardPage() {
   const { data: recentMeasurements } = await supabase
     .from("measurements")
     .select("location_id, weight_kg, measured_at")
+    .is("deleted_at", null)
     .order("measured_at", { ascending: false })
     .limit(200);
 

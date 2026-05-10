@@ -41,10 +41,43 @@ export async function GET(req: NextRequest) {
   const locationId = searchParams.get("location_id");
 
   const supabase = await createServerClient();
-  let query = supabase.from("culls").select("*, turkeys(tag)").order("culled_at", { ascending: false });
+  let query = supabase
+    .from("culls")
+    .select("*, turkeys(tag)")
+    .is("deleted_at", null)
+    .order("culled_at", { ascending: false });
   if (locationId) query = query.eq("location_id", locationId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data);
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const supabase = await createServerClient();
+
+  // Find the cull to revert turkey status
+  const { data: cull } = await supabase.from("culls").select("turkey_id").eq("id", id).single();
+
+  // Soft-delete the cull
+  const { error } = await supabase
+    .from("culls")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // Restore turkey to alive (since the cull is being undone)
+  if (cull?.turkey_id) {
+    await supabase.from("turkeys").update({ status: "alive" }).eq("id", cull.turkey_id);
+  }
+
+  return NextResponse.json({ success: true });
 }

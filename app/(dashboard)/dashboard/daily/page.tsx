@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import DailyTemperatureForm from "@/components/DailyTemperatureForm";
 import DeviationBadge from "@/components/DeviationBadge";
+import DeleteButton from "@/components/DeleteButton";
 import { t } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
 import { breedingWeek, aviagenForWeek, tempStatus, humidStatus } from "@/lib/aviagen";
@@ -14,6 +15,7 @@ export default async function DailyPage() {
     supabase
       .from("daily_temperatures")
       .select("*, locations(name)")
+      .is("deleted_at", null)
       .order("recorded_on", { ascending: false })
       .limit(50),
     supabase.from("aviagen_targets").select("*").order("week_start"),
@@ -79,6 +81,7 @@ export default async function DailyPage() {
                 <th className="text-center px-4 py-3">Υγρ.%</th>
                 <th className="text-center px-4 py-3">Νεκρά</th>
                 <th className="text-center px-4 py-3">Άρρ.</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -113,6 +116,9 @@ export default async function DailyPage() {
                     </td>
                     <td className="px-4 py-2 text-center text-red-400">{r.mortality}</td>
                     <td className="px-4 py-2 text-center text-amber-400">{r.sick_count}</td>
+                    <td className="px-4 py-2 text-center">
+                      <DeleteButton endpoint="/api/daily-temperatures" id={r.id} />
+                    </td>
                   </tr>
                 );
               })}

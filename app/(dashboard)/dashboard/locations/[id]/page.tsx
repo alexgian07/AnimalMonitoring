@@ -19,15 +19,17 @@ export default async function LocationPage({ params }: { params: Promise<{ id: s
     .from("turkeys")
     .select("*")
     .eq("location_id", id)
+    .is("deleted_at", null)
     .order("tag");
 
-  const turkeyIds = (turkeys ?? []).map((t: any) => t.id);
+  const turkeyIds = (turkeys ?? []).map((tk: any) => tk.id);
 
   const { data: latestMeasurements } = turkeyIds.length
     ? await supabase
         .from("measurements")
         .select("turkey_id, weight_kg, temperature_celsius, measured_at")
         .in("turkey_id", turkeyIds)
+        .is("deleted_at", null)
         .order("measured_at", { ascending: false })
         .limit(turkeyIds.length * 5)
     : { data: [] };

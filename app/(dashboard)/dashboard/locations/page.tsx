@@ -8,10 +8,11 @@ export default async function LocationsPage() {
   const supabase = await createServerClient();
 
   const { data: locations } = await supabase.from("locations").select("*").order("position");
-  const { data: turkeys } = await supabase.from("turkeys").select("id, location_id, status");
+  const { data: turkeys } = await supabase.from("turkeys").select("id, location_id, status").is("deleted_at", null);
   const { data: measurements } = await supabase
     .from("measurements")
     .select("location_id, weight_kg, measured_at")
+    .is("deleted_at", null)
     .order("measured_at", { ascending: false })
     .limit(500);
 

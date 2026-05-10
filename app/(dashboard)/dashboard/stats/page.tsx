@@ -9,12 +9,14 @@ export default async function StatsPage() {
   const { data: measurements } = await supabase
     .from("measurements")
     .select("measured_at, weight_kg, location_id")
+    .is("deleted_at", null)
     .order("measured_at", { ascending: true })
     .limit(1000);
 
   const { data: culls } = await supabase
     .from("culls")
     .select("culled_at, weight_at_cull, reason, location_id")
+    .is("deleted_at", null)
     .order("culled_at", { ascending: true });
 
   const { data: locations } = await supabase.from("locations").select("id, name");

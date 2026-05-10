@@ -37,11 +37,33 @@ export async function GET(req: NextRequest) {
   const locationId = searchParams.get("location_id");
 
   const supabase = await createServerClient();
-  let query = supabase.from("measurements").select("*").order("measured_at", { ascending: false });
+  let query = supabase
+    .from("measurements")
+    .select("*")
+    .is("deleted_at", null)
+    .order("measured_at", { ascending: false });
   if (turkeyId) query = query.eq("turkey_id", turkeyId);
   if (locationId) query = query.eq("location_id", locationId);
 
   const { data, error } = await query.limit(500);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data);
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const supabase = await createServerClient();
+  const { error } = await supabase
+    .from("measurements")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ success: true });
 }

@@ -54,11 +54,33 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get("date");
 
   const supabase = await createServerClient();
-  let query = supabase.from("daily_temperatures").select("*").order("recorded_on", { ascending: false });
+  let query = supabase
+    .from("daily_temperatures")
+    .select("*")
+    .is("deleted_at", null)
+    .order("recorded_on", { ascending: false });
   if (locationId) query = query.eq("location_id", locationId);
   if (date) query = query.eq("recorded_on", date);
 
   const { data, error } = await query.limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data);
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const supabase = await createServerClient();
+  const { error } = await supabase
+    .from("daily_temperatures")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ success: true });
 }
