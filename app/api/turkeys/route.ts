@@ -34,10 +34,30 @@ export async function GET(req: NextRequest) {
   const locationId = searchParams.get("location_id");
 
   const supabase = await createServerClient();
-  let query = supabase.from("turkeys").select("*").order("tag");
+  let query = supabase.from("turkeys").select("*").is("deleted_at", null).order("tag");
   if (locationId) query = query.eq("location_id", locationId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json(data);
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  const supabase = await createServerClient();
+  const now = new Date().toISOString();
+  // Soft-delete the turkey AND its measurements/culls so the cascade is consistent
+  const { error } = await supabase.from("turkeys").update({ deleted_at: now }).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  await supabase.from("measurements").update({ deleted_at: now }).eq("turkey_id", id).is("deleted_at", null);
+  await supabase.from("culls").update({ deleted_at: now }).eq("turkey_id", id).is("deleted_at", null);
+
+  return NextResponse.json({ success: true });
 }

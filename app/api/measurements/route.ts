@@ -7,7 +7,13 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { turkey_id, location_id, measured_at, weight_kg, temperature_celsius, notes } = body;
+  const {
+    turkey_id, location_id, measured_at,
+    weight_kg, temperature_celsius,
+    metatarsus_length_mm, metatarsus_diameter_mm,
+    chest_width_mm, keel_length_mm, body_length_mm,
+    notes,
+  } = body;
 
   if (!turkey_id || !location_id) {
     return NextResponse.json({ error: "turkey_id and location_id are required" }, { status: 400 });
@@ -18,8 +24,13 @@ export async function POST(req: NextRequest) {
     turkey_id,
     location_id,
     measured_at: measured_at ?? new Date().toISOString().split("T")[0],
-    weight_kg: weight_kg ?? null,
-    temperature_celsius: temperature_celsius ?? null,
+    weight_kg:              weight_kg              ?? null,
+    temperature_celsius:    temperature_celsius    ?? null,
+    metatarsus_length_mm:   metatarsus_length_mm   ?? null,
+    metatarsus_diameter_mm: metatarsus_diameter_mm ?? null,
+    chest_width_mm:         chest_width_mm         ?? null,
+    keel_length_mm:         keel_length_mm         ?? null,
+    body_length_mm:         body_length_mm         ?? null,
     notes: notes || null,
     recorded_by: userId,
   }).select().single();
