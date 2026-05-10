@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { LayoutDashboard, MapPin, ShieldCheck, BarChart2, Thermometer, Wheat, LayoutGrid } from "lucide-react";
+import { LayoutDashboard, MapPin, ShieldCheck, BarChart2, Thermometer, Wheat, LayoutGrid, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import TurkeySearch from "@/components/TurkeySearch";
@@ -15,6 +15,7 @@ export default function Sidebar({ role }: { role: string | null }) {
     { href: "/dashboard/barn",      label: t.barn.navLabel,  icon: LayoutGrid,    show: true },
     { href: "/dashboard/daily",     label: t.daily.navLabel, icon: Thermometer,   show: true },
     { href: "/dashboard/feed",      label: t.feed.navLabel,  icon: Wheat,         show: true },
+    { href: "/dashboard/tasks",     label: t.tasksEditor.navLabel, icon: CalendarClock, show: true },
     { href: "/dashboard/stats",     label: t.nav.stats,      icon: BarChart2,     show: true },
     { href: "/dashboard/admin",     label: t.nav.admin,     icon: ShieldCheck,     show: role === "admin" },
   ];

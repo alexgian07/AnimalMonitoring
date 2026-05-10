@@ -256,6 +256,28 @@ export const t = {
     weekdaysShort: ["Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ", "Κυρ"],
   },
 
+  // Tasks template editor
+  tasksEditor: {
+    navLabel: "Πρόγραμμα",
+    title: "Εβδομαδιαίο Πρόγραμμα",
+    subtitle: "Επεξεργασία επαναλαμβανόμενων εργασιών ανά ημέρα. Εμφανίζονται στο dashboard ως 'Σήμερα' / 'Αύριο'.",
+    addTask: "Νέα Εργασία",
+    day: "Ημέρα *",
+    timeSlot: "Ώρα",
+    timeSlotPlaceholder: "π.χ. 08:00 - 09:00",
+    taskLabel: "Περιγραφή *",
+    category: "Κατηγορία",
+    position: "Σειρά",
+    submit: "Προσθήκη",
+    submitting: "Αποθηκεύεται...",
+    save: "Αποθήκευση",
+    edit: "Επεξεργασία",
+    delete: "Διαγραφή",
+    cancel: "Ακύρωση",
+    confirmDelete: "Διαγραφή αυτής της εργασίας;",
+    noTasksDay: "—",
+  },
+
   // Slaughter schedule admin
   slaughter: {
     title: "Πρόγραμμα Σφαγών",
