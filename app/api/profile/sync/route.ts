@@ -15,13 +15,14 @@ export async function POST() {
   const { data: existing } = await service.from("profiles").select("id").eq("id", userId).single();
   if (existing) return NextResponse.json({ synced: false });
 
-  // New users start with NO location access — admin grants per pen.
+  // Small trusted-team setup: new invited users default to researcher with full pen access.
+  // Admin can downgrade to viewer / restrict locations later via the admin panel.
   const { error } = await service.from("profiles").insert({
     id: userId,
     email,
     name,
-    role: "viewer",
-    allowed_locations: [],
+    role: "researcher",
+    allowed_locations: null,
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

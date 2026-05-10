@@ -3,14 +3,6 @@ import { auth } from "@clerk/nextjs/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase/server";
 import ExcelJS from "exceljs";
 
-async function requireAdmin() {
-  const { userId } = await auth();
-  if (!userId) return null;
-  const sb = await createServerClient();
-  const { data } = await sb.from("profiles").select("role").eq("id", userId).single();
-  return data?.role === "admin" ? userId : null;
-}
-
 interface ImportSummary {
   measurements:        { inserted: number; skipped: number };
   daily_temperatures:  { inserted: number; skipped: number };
@@ -19,8 +11,9 @@ interface ImportSummary {
 }
 
 export async function POST(req: NextRequest) {
-  const adminId = await requireAdmin();
-  if (!adminId) return NextResponse.json({ error: "Forbidden — only admins can import" }, { status: 403 });
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const adminId = userId;  // historical name kept below
 
   const form = await req.formData();
   const file = form.get("file") as File | null;

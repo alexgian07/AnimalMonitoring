@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server";
 import MultiGroupChart from "@/components/charts/MultiGroupChart";
 import ExportButton from "@/components/ExportButton";
+import ImportExcel from "@/components/ImportExcel";
 import { t } from "@/lib/i18n";
 import { breedingWeek, aviagenForWeek } from "@/lib/aviagen";
 
@@ -128,6 +129,8 @@ export default async function StatsPage() {
         yUnit="°C"
         band={band}
       />
+
+      <ImportExcel />
     </div>
   );
 }

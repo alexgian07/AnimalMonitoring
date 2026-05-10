@@ -2,6 +2,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import DailyTemperatureForm from "@/components/DailyTemperatureForm";
 import DeviationBadge from "@/components/DeviationBadge";
 import DeleteButton from "@/components/DeleteButton";
+import SlaughterSchedule from "@/components/SlaughterScheduleAdmin";
 import { t } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
 import { breedingWeek, aviagenForWeek, tempStatus, humidStatus } from "@/lib/aviagen";
@@ -126,6 +127,8 @@ export default async function DailyPage() {
           </table>
         )}
       </div>
+
+      <SlaughterSchedule />
     </div>
   );
 }
