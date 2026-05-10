@@ -102,7 +102,11 @@ export default async function LocationPage({ params }: { params: Promise<{ id: s
               const m = latestByTurkey[turkey.id];
               return (
                 <tr key={turkey.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                  <td className="px-4 py-3 font-mono text-white font-medium">{turkey.tag}</td>
+                  <td className="px-4 py-3 font-mono">
+                    <Link href={`/dashboard/turkeys/${turkey.id}`} className="text-emerald-400 hover:underline font-medium">
+                      {turkey.tag}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-gray-300">
                     {turkey.sex === "M" ? t.turkey.male : turkey.sex === "F" ? t.turkey.female : t.turkey.unknown}
                   </td>

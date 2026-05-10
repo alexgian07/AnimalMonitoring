@@ -5,6 +5,7 @@ import { UserButton } from "@clerk/nextjs";
 import { LayoutDashboard, MapPin, ShieldCheck, BarChart2, Thermometer, Wheat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import TurkeySearch from "@/components/TurkeySearch";
 
 export default function Sidebar({ role }: { role: string | null }) {
   const pathname = usePathname();
@@ -26,7 +27,10 @@ export default function Sidebar({ role }: { role: string | null }) {
       <div className="px-6 py-5 border-b border-gray-800">
         <span className="text-xl font-bold text-white">{t.brand}</span>
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <div className="pt-4">
+        <TurkeySearch />
+      </div>
+      <nav className="flex-1 px-3 py-2 space-y-1">
         {nav.filter(n => n.show).map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
