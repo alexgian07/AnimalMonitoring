@@ -15,12 +15,13 @@ export async function POST() {
   const { data: existing } = await service.from("profiles").select("id").eq("id", userId).single();
   if (existing) return NextResponse.json({ synced: false });
 
+  // New users start with NO location access — admin grants per pen.
   const { error } = await service.from("profiles").insert({
     id: userId,
     email,
     name,
     role: "viewer",
-    allowed_locations: null,
+    allowed_locations: [],
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
