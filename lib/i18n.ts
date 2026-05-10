@@ -144,6 +144,36 @@ export const t = {
     noUsers: "Δεν υπάρχουν χρήστες ακόμα. Εμφανίζονται μετά την πρώτη σύνδεσή τους.",
   },
 
+  // Feed log (ΖΥΓΙΣΗ ΤΡΟΦΗΣ)
+  feed: {
+    navLabel: "Τροφή",
+    title: "Ζύγιση Τροφής & FCR",
+    subtitle: "Εβδομαδιαία καταγραφή κατανάλωσης τροφής ανά κελί + υπολογισμός FCR",
+    formTitle: "Νέα Καταγραφή",
+    cell: "Κελί *",
+    selectCell: "Επιλέξτε κελί...",
+    feeder: "Ταΐστρα",
+    feederMain: "Κύρια",
+    feederExtra: "Έξτρα (πρώτες 2 εβδ.)",
+    weekNumber: "Εβδομάδα *",
+    weekStartDate: "Ημ/νία (Δευτέρα) *",
+    weightBefore: "Βάρος ταΐστρας πριν (kg)",
+    feedAdded: "Προσθήκη τροφής (kg)",
+    weightAfter: "Βάρος ταΐστρας μετά (kg)",
+    birdCount: "Αριθμός ζώων",
+    avgWeight: "Μέσο βάρος (kg)",
+    weightGain: "Αύξηση βάρους (kg)",
+    notes: "Σχόλια",
+    submit: "Αποθήκευση",
+    submitting: "Αποθηκεύεται...",
+    historyTitle: "Ιστορικό ανά Κελί",
+    noLogs: "Δεν υπάρχουν καταγραφές ακόμα",
+    consumption: "Κατανάλωση",
+    totalFlock: "Σύνολο σμήνους",
+    fcrWeekly: "FCR εβδ.",
+    fcrCumulative: "FCR σωρευτ.",
+  },
+
   // Daily form (ΗΜΕΡΗΣΙΟ)
   daily: {
     navLabel: "Ημερήσιο",
