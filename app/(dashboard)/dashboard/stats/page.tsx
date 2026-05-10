@@ -1,86 +1,130 @@
 import { createServerClient } from "@/lib/supabase/server";
-import WeightChart from "@/components/WeightChart";
-import CullChart from "@/components/CullChart";
+import MultiGroupChart from "@/components/charts/MultiGroupChart";
+import TimeSeriesChart from "@/components/charts/TimeSeriesChart";
 import { t } from "@/lib/i18n";
+import { breedingWeek, aviagenForWeek } from "@/lib/aviagen";
 
 export default async function StatsPage() {
   const supabase = await createServerClient();
 
-  const { data: measurements } = await supabase
-    .from("measurements")
-    .select("measured_at, weight_kg, location_id")
-    .is("deleted_at", null)
-    .order("measured_at", { ascending: true })
-    .limit(1000);
+  const [
+    { data: locations },
+    { data: turkeys },
+    { data: measurements },
+    { data: dailyTemps },
+    { data: feedLogs },
+    { data: aviagen },
+    { data: settings },
+  ] = await Promise.all([
+    supabase.from("locations").select("*").order("position"),
+    supabase.from("turkeys").select("id, sex, location_id").is("deleted_at", null),
+    supabase.from("measurements").select("*").is("deleted_at", null).order("measured_at"),
+    supabase.from("daily_temperatures").select("*").is("deleted_at", null).order("recorded_on"),
+    supabase.from("feed_logs").select("*").is("deleted_at", null).order("week_number"),
+    supabase.from("aviagen_targets").select("*").order("week_start"),
+    supabase.from("app_settings").select("project_start_date").eq("id", 1).single(),
+  ]);
 
-  const { data: culls } = await supabase
-    .from("culls")
-    .select("culled_at, weight_at_cull, reason, location_id")
-    .is("deleted_at", null)
-    .order("culled_at", { ascending: true });
+  const projectStart = settings?.project_start_date ?? null;
 
-  const { data: locations } = await supabase.from("locations").select("id, name");
+  // Build cell labels map
+  const cellLabels: Record<string, string> = {};
+  for (const l of locations ?? []) cellLabels[l.id] = l.name;
 
-  // Weekly avg weight per location
-  const weeklyWeightData: Record<string, any[]> = {};
-  for (const m of measurements ?? []) {
-    const week = m.measured_at?.slice(0, 7); // YYYY-MM
-    if (!week || !m.weight_kg) continue;
-    if (!weeklyWeightData[week]) weeklyWeightData[week] = [];
-    weeklyWeightData[week].push(m.weight_kg);
-  }
-  const weightChartData = Object.entries(weeklyWeightData).map(([month, weights]) => ({
-    month,
-    avg: Math.round((weights.reduce((a, b) => a + b, 0) / weights.length) * 100) / 100,
+  // Build turkey → sex map for joining sex onto measurements
+  const turkeySex: Record<string, string> = {};
+  for (const tk of turkeys ?? []) turkeySex[tk.id] = tk.sex ?? "Unknown";
+
+  // Helper: build a flattened raw-row array for any numeric field on measurements
+  const measurementRows = (field: string) => (measurements ?? []).map((m: any) => ({
+    date: m.measured_at,
+    value: m[field] ?? null,
+    location_id: m.location_id,
+    sex: turkeySex[m.turkey_id] ?? null,
   }));
 
-  // Weekly culls
-  const weekCullData: Record<string, number> = {};
-  for (const c of culls ?? []) {
-    const week = c.culled_at?.slice(0, 7);
-    if (!week) continue;
-    weekCullData[week] = (weekCullData[week] ?? 0) + 1;
-  }
-  const cullChartData = Object.entries(weekCullData).map(([month, count]) => ({ month, count }));
+  // Daily temp rows (use temp_max as the comparable value to Aviagen)
+  const tempRows = (dailyTemps ?? []).map((r: any) => ({
+    date: r.recorded_on,
+    value: r.temp_max ?? r.temp_midday ?? r.temp_morning ?? null,
+    location_id: r.location_id,
+    sex: null,
+  }));
 
-  const totalCulled = (culls ?? []).length;
-  const harvestCulled = (culls ?? []).filter((c: any) => c.reason === "harvest").length;
-  const avgCullWeight = (culls ?? []).filter((c: any) => c.weight_at_cull).length
-    ? (culls ?? []).reduce((sum: number, c: any) => sum + (c.weight_at_cull ?? 0), 0) / (culls ?? []).filter((c: any) => c.weight_at_cull).length
-    : null;
+  // FCR data from feed_logs (no sex grouping — feed is per pen)
+  const fcrRows = (feedLogs ?? [])
+    .filter((l: any) => l.feeder_label === "main") // main feeder only for primary FCR view
+    .map((l: any) => ({
+      date: l.week_start_date,
+      value: l.consumption_kg && l.weight_gain_kg && l.weight_gain_kg > 0
+        ? Number((l.consumption_kg / l.weight_gain_kg).toFixed(2))
+        : null,
+      location_id: l.location_id,
+      sex: null,
+    }));
+
+  // Aviagen target band — pick the WIDEST range observed across the dataset's weeks for visual context
+  let band: { y1: number; y2: number } | undefined = undefined;
+  if (projectStart && aviagen?.length) {
+    const allWeeks = (dailyTemps ?? []).map((r: any) => breedingWeek(r.recorded_on, projectStart)).filter(w => w > 0);
+    if (allWeeks.length) {
+      const w = allWeeks[Math.floor(allWeeks.length / 2)];   // median-ish week
+      const target = aviagenForWeek(w, aviagen);
+      if (target) band = { y1: target.temp_min, y2: target.temp_max };
+    }
+  }
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-white mb-1">{t.stats.title}</h1>
-      <p className="text-gray-400 text-sm mb-8">{t.stats.subtitle}</p>
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white mb-1">{t.stats.title}</h1>
+        <p className="text-gray-400 text-sm">{t.stats.subtitle}</p>
+      </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <div className="text-2xl font-bold text-red-400">{totalCulled}</div>
-          <div className="text-xs text-gray-500 mt-1">{t.stats.totalCulled}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <div className="text-2xl font-bold text-amber-400">{harvestCulled}</div>
-          <div className="text-xs text-gray-500 mt-1">{t.stats.harvested}</div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <div className="text-2xl font-bold text-white">
-            {avgCullWeight ? `${avgCullWeight.toFixed(2)} kg` : t.common.dash}
+      {/* Weight */}
+      <MultiGroupChart
+        title={t.stats.weight}
+        subtitle="kg ανά εβδομάδα"
+        rows={measurementRows("weight_kg")}
+        cellLabels={cellLabels}
+        projectStart={projectStart}
+        yUnit="kg"
+      />
+
+      {/* Body measurements grid */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 className="font-semibold text-white mb-4">{t.stats.bodyMeasurements}</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <MultiGroupChart title={t.stats.metatarsus}  rows={measurementRows("metatarsus_length_mm")}   cellLabels={cellLabels} projectStart={projectStart} yUnit="mm" />
+          <MultiGroupChart title={t.stats.metatarsusD} rows={measurementRows("metatarsus_diameter_mm")} cellLabels={cellLabels} projectStart={projectStart} yUnit="mm" />
+          <MultiGroupChart title={t.stats.chestWidth}  rows={measurementRows("chest_width_mm")}         cellLabels={cellLabels} projectStart={projectStart} yUnit="mm" />
+          <MultiGroupChart title={t.stats.keelLength}  rows={measurementRows("keel_length_mm")}         cellLabels={cellLabels} projectStart={projectStart} yUnit="mm" />
+          <div className="lg:col-span-2">
+            <MultiGroupChart title={t.stats.bodyLength} rows={measurementRows("body_length_mm")} cellLabels={cellLabels} projectStart={projectStart} yUnit="mm" />
           </div>
-          <div className="text-xs text-gray-500 mt-1">{t.stats.avgCullWeight}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="font-semibold text-white mb-4">{t.stats.weightOverTime}</h2>
-          <WeightChart data={weightChartData} />
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="font-semibold text-white mb-4">{t.stats.cullsPerMonth}</h2>
-          <CullChart data={cullChartData} />
-        </div>
-      </div>
+      {/* FCR */}
+      <MultiGroupChart
+        title={t.stats.fcr}
+        subtitle="Δείκτης μετατρεψιμότητας τροφής (κατανάλωση kg / αύξηση kg)"
+        rows={fcrRows}
+        cellLabels={cellLabels}
+        projectStart={projectStart}
+        defaultGrouping="cell"
+      />
+
+      {/* Temperatures vs Aviagen */}
+      <MultiGroupChart
+        title={t.stats.tempMaxDev}
+        subtitle="Μέγιστη ημερήσια θερμοκρασία ανά κελί. Πράσινη ζώνη = ενδεικτικό εύρος Aviagen."
+        rows={tempRows}
+        cellLabels={cellLabels}
+        projectStart={projectStart}
+        yUnit="°C"
+        band={band}
+      />
     </div>
   );
 }
