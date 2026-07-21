@@ -3,7 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
-const MODEL = process.env.GROQ_MODEL || "whisper-large-v3-turbo";
+// large-v3 is more accurate than turbo (better on numbers/accents), still fast on Groq.
+const MODEL = process.env.GROQ_MODEL || "whisper-large-v3";
 const VOCAB =
   "Walking, Standing, Sitting, Running, Eating, Drinking, Grooming, Preening, " +
   "Environmental Pecking, Aggressive Pecking, Feather Pecking, Fighting, Dust bathing, " +

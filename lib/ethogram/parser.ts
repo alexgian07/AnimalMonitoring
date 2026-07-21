@@ -19,7 +19,7 @@ export const BEHAVIOURS: Behaviour[] = [
   { name: "Grooming", cat: "gen",  syn: ["grooming", "groom", "grooms"] },
   { name: "Preening", cat: "gen",  syn: ["preening", "preen", "preens"] },
   { name: "Env. Pecking",    cat: "gen", syn: ["environmental pecking", "environment pecking", "env pecking", "environmental peck", "environmental", "environment"] },
-  { name: "Agr. Pecking",    cat: "gen", syn: ["aggressive pecking", "aggression pecking", "agr pecking", "agro pecking", "aggressive peck", "aggressive", "aggression", "agro"] },
+  { name: "Agr.Pecking",     cat: "gen", syn: ["aggressive pecking", "aggression pecking", "agr pecking", "agro pecking", "aggressive peck", "aggressive", "aggression", "agro"] },
   { name: "Feather Pecking", cat: "gen", syn: ["feather pecking", "feather peck", "feather pecks", "feather"] },
   { name: "Fighting", cat: "gen",  syn: ["fighting", "fight", "fights"] },
   { name: "Dust bathing", cat: "gen", syn: ["dust bathing", "dust bath", "dustbathing", "dust bathe", "bathing", "dustbath"] },

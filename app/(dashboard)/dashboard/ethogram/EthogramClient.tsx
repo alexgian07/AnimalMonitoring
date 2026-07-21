@@ -133,8 +133,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     const head = ["OBSERV.", "Cell", ...BEHAVIOURS.map((b) => b.name)];
     const rows: (string | number)[][] = [head];
     for (let o = 0; o < OBS; o++)
-      for (let c = 0; c < CELLS.length; c++)
-        rows.push([o + 1, CELLS[c], ...data[o][c].map((v) => (v || "") as string | number)]);
+      for (let c = 0; c < CELLS.length; c++) {
+        const counts = data[o][c];
+        const sum = counts.reduce((a, b) => a + b, 0);
+        // trailing per-row Σ total to match the existing filled tabs
+        rows.push([o + 1, CELLS[c], ...counts.map((v) => (v || "") as string | number), sum || ""]);
+      }
     return rows;
   };
 
@@ -142,7 +146,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   async function toggleRecord() {
     if (recState === "recording") { mediaRef.current?.stop(); return; }
     try {
-      if (!streamRef.current) streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!streamRef.current)
+        streamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        });
     } catch (e) {
       setHeard({ text: "⚠ microphone blocked: " + e, err: true });
       return;
