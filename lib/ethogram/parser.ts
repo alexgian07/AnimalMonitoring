@@ -41,10 +41,15 @@ const NUM: Record<string, number> = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
   eighteen: 18, nineteen: 19, twenty: 20, a: 1, an: 1,
+  // number-homophones Whisper commonly picks (two/to/too are acoustically identical)
+  to: 2, too: 2, won: 1, for: 4, fore: 4, ate: 8,
 };
+// connector words to skip inside "make it / change to N" so "to" isn't read as 2 there
+const NUM_CONNECTORS = ["to", "too", "for", "fore"];
 const UNDO = ["cancel", "undo", "delete", "remove", "scratch", "nope", "no", "oops", "mistake", "forget", "ignore"];
+// note: "to"/"for" removed from filler — they now count as number-homophones above
 const FILLER = ["more", "and", "of", "the", "then", "plus", "times", "um", "uh", "er", "oh", "okay", "ok",
-  "now", "so", "is", "was", "are", "to", "for", "wait", "let", "lets", "give", "got", "another", "also"];
+  "now", "so", "is", "was", "are", "wait", "let", "lets", "give", "got", "another", "also"];
 
 const PHRASES: { words: string[]; beh: number }[] = [];
 BEHAVIOURS.forEach((b, i) => b.syn.forEach((s) => PHRASES.push({ words: s.split(" "), beh: i })));
@@ -79,6 +84,7 @@ export function parseToOps(text: string): Op[] {
       let j = i + 1, n: number | null = null;
       while (j < Math.min(i + 4, w.length)) {
         const x = w[j];
+        if (NUM_CONNECTORS.includes(x)) { j++; continue; } // "to" here is the connector, not 2
         if (x in NUM) { n = NUM[x]; break; }
         if (/^\d+$/.test(x)) { n = +x; break; }
         j++;
