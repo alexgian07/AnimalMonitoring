@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { BEHAVIOURS, CELLS, OBS, CATS, parseToOps, type Op } from "@/lib/ethogram/parser";
 
 /* ---------------- state + reducer ---------------- */
@@ -114,6 +114,32 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // recording timer (count-up; target is ~1 minute per cell)
+  const [elapsed, setElapsed] = useState(0); // seconds
+  const timerRef = useRef<number | null>(null);
+  const startRef = useRef(0);
+  const buzzedRef = useRef(false);
+  const TARGET = 60;
+
+  function startTimer() {
+    startRef.current = Date.now();
+    buzzedRef.current = false;
+    setElapsed(0);
+    timerRef.current = window.setInterval(() => {
+      const s = (Date.now() - startRef.current) / 1000;
+      setElapsed(s);
+      if (s >= TARGET && !buzzedRef.current) {
+        buzzedRef.current = true;
+        if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate([300, 120, 300]);
+      }
+    }, 250);
+  }
+  function stopTimer() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+  useEffect(() => () => stopTimer(), []);
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
   const { data, obs, active } = state;
 
   const tabName = () => {
@@ -164,6 +190,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     chunksRef.current = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
     rec.onstop = async () => {
+      stopTimer();
       setRecState("busy");
       setHeard({ text: "… transcribing" });
       const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
@@ -186,6 +213,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       setRecState("idle");
     };
     rec.start();
+    startTimer();
     setRecState("recording");
     setHeard({ text: "listening… speak the tallies, tap Stop when done" });
   }
@@ -310,6 +338,14 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           Next ▸
         </button>
       </div>
+
+      {/* recording timer */}
+      {recState === "recording" && (
+        <div className={`flex items-center justify-center gap-2 mb-2 text-3xl font-bold tabular-nums ${elapsed >= TARGET ? "text-amber-400" : "text-emerald-400"}`}>
+          ⏱ {mmss(elapsed)}
+          {elapsed >= TARGET && <span className="text-sm font-medium">· 1 min — you can stop</span>}
+        </div>
+      )}
 
       {/* heard */}
       <div className={`min-h-[44px] rounded-xl px-3 py-2.5 text-sm leading-snug mb-3 bg-gray-950 border border-gray-800 ${heard.err ? "text-red-400" : "text-gray-300"}`}>

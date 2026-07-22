@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 
 export default async function Home() {
   const { userId } = await auth();
-  if (userId) redirect("/dashboard");
+  // Ethogram is the default landing page for now; /dashboard still exists (type the URL).
+  if (userId) redirect("/ethogram");
   else redirect("/sign-in");
 }
