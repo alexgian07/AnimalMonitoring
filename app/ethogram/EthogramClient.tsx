@@ -198,11 +198,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           dispatch({ type: "hydrate", data: emptyGrid() });
           setSessionStatus(null);
         }
-        // committed session with edits after the commit → "edited since commit"
+        // committed session with edits after the commit → "edited since commit".
+        // 2s tolerance so the sub-ms skew of older commits (which set the two timestamps in
+        // separate now() calls) isn't mistaken for a real later edit; genuine edits are seconds+ later.
         setDirtySinceCommit(
-          d.session?.status === "committed" &&
-          !!d.session.updated_at && !!d.session.committed_at &&
-          d.session.updated_at > d.session.committed_at,
+          d.session?.status === "committed" && !!d.session.updated_at && !!d.session.committed_at &&
+          new Date(d.session.updated_at).getTime() - new Date(d.session.committed_at).getTime() > 2000,
         );
         // rebuild the per-cell transcript map (obs/cell come back 1-based)
         const tmap: Record<string, string> = {};
