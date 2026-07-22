@@ -9,7 +9,7 @@ export default function SignInPage() {
           <h1 className="text-3xl font-bold text-white">{t.auth.title}</h1>
           <p className="text-gray-400 mt-2">{t.auth.signInSubtitle}</p>
         </div>
-        <SignIn />
+        <SignIn forceRedirectUrl="/ethogram" />
       </div>
     </div>
   );
