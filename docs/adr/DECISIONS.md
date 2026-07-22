@@ -89,3 +89,45 @@ built-in **version history** + the frozen `.xlsx` original.
 **Consequences.** A bad commit can at worst add one extra tab (easily deleted); it can never
 overwrite or delete existing data. To re-commit a day, the old tab must be renamed/deleted first.
 An explicit "update existing tab" mode would be a deliberate future decision, not a default.
+
+---
+
+## ADR 0006 — Supabase persistence: draft autosave + transcript audit; Sheets stays the record
+
+**Status:** Accepted (implemented 2026-07-22 — the first production writes this project ever stored).
+
+**Context.** Until now the whole session lived only in React state (`EthogramClient` reducer): a
+phone refresh, tab close, or crash mid-session lost everything, and each clip's transcript was
+discarded the instant it was parsed. We wanted durability (crash-recovery/resume) and a scientific
+audit trail (what was actually said per cell), on the **free** Supabase tier.
+
+**Decision.** Add two tables (see `supabase/schema.sql`), keeping **Google Sheets as the system of
+record** — Supabase is the safety net + memory, not the source of truth:
+- `ethogram_sessions` — one row per `(user_id, session_date, time_of_day)` (natural key = the Sheet
+  tab name `D-M Π/Μ`). The 48×22 grid is stored as a **JSONB `data` column** (mirrors the in-memory
+  `number[][][]`), **autosaved (debounced ~1.5s)** on every change via `POST /api/ethogram/session`.
+  `GET` resumes it. Commit sets `status='committed'`, `sheet_tab`, `committed_by`, `committed_at`.
+- `ethogram_recordings` — append-only transcript log (`obs`, `cell`, `transcript`) via
+  `POST /api/ethogram/recording`; returned with the session on resume and shown per cell (latest wins).
+- **Ownership-based RLS** (`user_id = <clerk sub>`; admins may read all). Deliberately **not**
+  gated on the `researcher`/`admin` role or `allowed_locations` — ethogram is decoupled from the
+  turkey location model, and `profiles` is empty so role helpers evaluate false for everyone.
+- **Committer visibility:** commit writes an **A1 cell note** ("Committed by <name> (<email>) · <ts>",
+  name resolved from Clerk) — chosen over a header/footer row so the strict 48-row grid is untouched.
+- **"Clear whole day"** deletes the session (cascades to recordings) but **never touches the Sheet**
+  (consistent with ADR 0005 — the app never deletes Sheet data; deleting a committed tab stays manual).
+
+**Why JSONB over normalized per-cell rows.** The grid is really one document per session, edited by
+one person, exported as a unit. JSONB makes autosave a one-line upsert and matches the client shape
+exactly. Cross-session SQL analysis (if ever needed) can flatten at commit time or be done in Sheets.
+
+**Why the free tier is safe.** ~200 sessions/year × ~15 KB (grid + transcripts) ≈ **~4 MB/year** vs
+the 500 MB free DB. The only thing that would blow it is storing **audio** — so we don't; audio is
+still discarded after transcription. Watch the free-tier **7-day inactivity pause** (an availability
+quirk, not a capacity one).
+
+**Consequences.** A refresh/crash no longer loses work; transcripts are preserved for verification
+and re-parsing. Note the date picker **resets to today on load** (sensible default) — resuming a
+different day means reselecting its date + AM/PM. Autosave skips a fully-empty grid (no empty rows).
+The commit's session-status update and the transcript save are **best-effort** (a failure never
+blocks the commit or the UI) since the Sheet remains authoritative.

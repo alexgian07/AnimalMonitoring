@@ -17,18 +17,30 @@ export async function GET(req: NextRequest) {
 
   try {
     const supabase = await createServerClient();
-    const { data, error } = await supabase
+    const { data: session, error } = await supabase
       .from("ethogram_sessions")
-      .select("data, status, sheet_tab, committed_at, updated_at")
+      .select("id, data, status, sheet_tab, committed_at, updated_at")
       .eq("user_id", userId)
       .eq("session_date", date)
       .eq("time_of_day", ampm)
       .maybeSingle();
     if (error) throw error;
-    return NextResponse.json({ session: data ?? null });
+
+    // Also return the transcript history so the client can show what was said per cell.
+    let recordings: { obs: number; cell: number; transcript: string }[] = [];
+    if (session?.id) {
+      const { data: recs } = await supabase
+        .from("ethogram_recordings")
+        .select("obs, cell, transcript, created_at")
+        .eq("session_id", session.id)
+        .order("created_at", { ascending: true });   // ascending → later takes win when reduced
+      recordings = (recs ?? []).map((r) => ({ obs: r.obs, cell: r.cell, transcript: r.transcript }));
+    }
+
+    return NextResponse.json({ session: session ?? null, recordings });
   } catch (e) {
     // Loading is best-effort: never block the UI if persistence is unavailable.
-    return NextResponse.json({ session: null, error: (e as Error).message });
+    return NextResponse.json({ session: null, recordings: [], error: (e as Error).message });
   }
 }
 

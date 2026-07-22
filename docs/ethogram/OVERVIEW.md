@@ -60,11 +60,18 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 | File | Role |
 |---|---|
 | `lib/ethogram/parser.ts` | Pure, framework-free parser. `parseToOps(text)` → list of ops (add / addLast / undo / setLast / cell / next). Also exports `BEHAVIOURS`, `CELLS`, `OBS`. Fully unit-testable. |
-| `lib/ethogram/sheets.ts` | `commitDay(spreadsheetId, tabName, rows)` via `googleapis` + a service account. Adds a new tab; **throws `TabExistsError` (409) rather than overwrite**. Creds from `GOOGLE_CREDENTIALS` env. |
+| `lib/ethogram/sheets.ts` | `commitDay(spreadsheetId, tabName, rows, note?)` via `googleapis` + a service account. Adds a new tab; **throws `TabExistsError` (409) rather than overwrite**. Optional `note` → an A1 cell note (who committed). Creds from `GOOGLE_CREDENTIALS` env. |
 | `app/api/ethogram/transcribe/route.ts` | Clerk-guarded. POST audio → Groq Whisper → `{text}`. `runtime = "nodejs"`. |
-| `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows}` → `commitDay`. |
+| `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows, sessionDate, timeOfDay}` → `commitDay` (with committer A1 note) + marks the session `committed` in Supabase. |
+| `app/api/ethogram/session/route.ts` | Clerk-guarded. `POST` autosaves the working grid (upsert on the natural key); `GET ?date=&ampm=` resumes it **plus its transcripts**; `DELETE` clears a whole day (session + recordings; never touches the Sheet). |
+| `app/api/ethogram/recording/route.ts` | Clerk-guarded. `POST {date, ampm, obs, cell, transcript}` appends a transcript to `ethogram_recordings` (audit trail). |
 | `app/ethogram/page.tsx` | Server component; reads env to decide `commitEnabled`. |
-| `app/ethogram/EthogramClient.tsx` | The whole UI: reducer over `data[obs][cell][behaviour]`, MediaRecorder, timer, grid, export/commit. `"use client"`. |
+| `app/ethogram/EthogramClient.tsx` | The whole UI: reducer over `data[obs][cell][behaviour]`, MediaRecorder, timer, grid, export/commit. **Debounced autosave + resume + per-cell transcript display.** `"use client"`. |
+
+**Persistence tables** (see `supabase/schema.sql`, ADR 0006): `ethogram_sessions` (JSONB grid,
+autosaved; natural key `user_id + session_date + time_of_day`) and `ethogram_recordings` (append-only
+transcript log). Ownership-based RLS. **Google Sheets stays the system of record**; Supabase is the
+crash-recovery safety net + audit trail.
 | `app/ethogram/layout.tsx` | Minimal full-screen layout (no dashboard sidebar). |
 | `app/page.tsx`, `app/(auth)/sign-in|sign-up` | Redirect `/` and post-login to `/ethogram`. |
 | `components/Sidebar.tsx` | One nav link to `/ethogram` (only seen if you open `/dashboard`). |
@@ -83,8 +90,14 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 5. **Redo semantics**: recording a cell that already has counts **clears it first** (button shows
    amber "↻ Redo") — a second pass **replaces**, never accumulates.
 6. **Next ▸** walks K1→K8, then rolls into the next observation.
-7. **Commit** → `/api/ethogram/commit` → a new `D-M Π/Μ` tab with all 48 rows. Or **Copy for
-   Excel** for a manual paste.
+7. **Autosave (Supabase):** every grid change is debounced (~1.5s) and upserted to
+   `ethogram_sessions`; each transcript is appended to `ethogram_recordings`. The header shows
+   `saving… / saved ✓`. A refresh/crash loses nothing — reselect the same date + AM/PM to **resume**
+   (grid + per-cell transcripts reload). The date picker **resets to today on load** by design.
+8. **Commit** → `/api/ethogram/commit` → a new `D-M Π/Μ` tab with all 48 rows, an **A1 note** naming
+   who committed, and the session marked `committed`. Or **Copy for Excel** for a manual paste.
+9. **Clear whole day** wipes the grid and deletes the saved session (+ its transcripts). It **never
+   touches Google Sheets** — deleting an already-committed tab stays a manual step in Sheets.
 
 ### Speech the parser understands
 - Counting: `three sitting`, `two more eating`, `one drinking`.
@@ -175,5 +188,13 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
 ## 10. Open items
 
 - Broader end-to-end verification of every commit action + state handling.
-- Supabase-backed session history / audit trail (would use the Supabase MCP).
+- ~~Supabase-backed session history / audit trail~~ — **done** (ADR 0006): drafts autosave/resume
+  and transcripts are persisted. Still possible: a **past-sessions browser** (list/reopen prior
+  days from `ethogram_sessions`) — currently you resume only by reselecting a date + AM/PM.
+- **Security hardening (pre-existing, unrelated to ethogram):** the original PoC helper functions
+  (`is_admin`, `get_my_profile`, `can_access_location`, `is_researcher_or_admin`, `rls_auto_enable`)
+  trip Supabase advisors — mutable `search_path` + anon/authenticated `EXECUTE` on `SECURITY DEFINER`
+  functions. Worth `SET search_path = ''` + `REVOKE EXECUTE ... FROM anon` before wider use.
+- Optional: remember the last-used date/AM-PM (localStorage) so a refresh reopens the active session
+  instead of defaulting to today.
 - The 2nd form type, when provided.

@@ -134,6 +134,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [sessionStatus, setSessionStatus] = useState<"draft" | "committed" | null>(null);
   const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
   const saveTimerRef = useRef<number | null>(null);
+  // saved transcript per cell, keyed `${obs}-${cell}` (0-based); shown on resume
+  const [transcripts, setTranscripts] = useState<Record<string, string>>({});
+  const recCellRef = useRef<{ obs: number; cell: number }>({ obs: 0, cell: 0 });
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -189,6 +192,11 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           dispatch({ type: "hydrate", data: emptyGrid() });
           setSessionStatus(null);
         }
+        // rebuild the per-cell transcript map (obs/cell come back 1-based)
+        const tmap: Record<string, string> = {};
+        for (const r of (d.recordings ?? []) as { obs: number; cell: number; transcript: string }[])
+          tmap[`${r.obs - 1}-${r.cell - 1}`] = r.transcript;
+        setTranscripts(tmap);
         setSaveState("idle");
       } catch {
         if (!cancelled) hydratingRef.current = false;   // load failed → allow normal saving
@@ -255,8 +263,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   /* ---- recording ---- */
   async function toggleRecord() {
     if (recState === "recording") { mediaRef.current?.stop(); return; }
+    recCellRef.current = { obs, cell: active };   // the cell this clip belongs to
     // Redo: if this cell already has counts, a fresh recording replaces them (no accumulating).
-    if (data[obs][active].some((v) => v > 0)) dispatch({ type: "clearCell" });
+    if (data[obs][active].some((v) => v > 0)) {
+      dispatch({ type: "clearCell" });
+      setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; });
+    }
     try {
       if (!streamRef.current)
         streamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -294,8 +306,19 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         });
         const d = await res.json();
         if (d.text != null) {
-          setHeard({ text: d.text.trim() || "(nothing heard)" });
+          const text = d.text.trim();
+          setHeard({ text: text || "(nothing heard)" });
           dispatch({ type: "ops", ops: parseToOps(d.text) });
+          if (text) {
+            const { obs: ro, cell: rc } = recCellRef.current;
+            setTranscripts((m) => ({ ...m, [`${ro}-${rc}`]: text }));
+            // persist the transcript (audit trail); best-effort, never blocks the UI
+            fetch("/api/ethogram/recording", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ date: dateStr, ampm, obs: ro + 1, cell: rc + 1, transcript: text }),
+            }).catch(() => {});
+          }
         } else {
           setHeard({ text: "⚠ " + (d.error?.message || d.error || JSON.stringify(d)), err: true });
         }
@@ -342,6 +365,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     dispatch({ type: "hydrate", data: emptyGrid() });
     setSessionStatus(null);
     setSaveState("idle");
+    setTranscripts({});
     try {
       await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}`, { method: "DELETE" });
       setNote("Cleared " + tabName() + " — the Google Sheet was not touched");
@@ -501,6 +525,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <span className="font-bold">Obs {obs + 1} · {CELLS[active]}</span>
         <span className="text-xs text-gray-400">{cellTotal ? cellTotal + " scored" : ""}</span>
       </div>
+      {transcripts[`${obs}-${active}`] && (
+        <div className="text-[11px] text-gray-500 italic mb-1.5 leading-snug">🗣 “{transcripts[`${obs}-${active}`]}”</div>
+      )}
       <div className="flex flex-col gap-1.5">
         {BEHAVIOURS.map((b, bi) => {
           const v = data[obs][active][bi];
@@ -523,7 +550,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <button onClick={() => setShowGrid((s) => !s)} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">▦ Full grid (48)</button>
         <button onClick={copyGrid} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">📋 Copy for Excel</button>
         <button onClick={downloadCsv} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">⬇ CSV</button>
-        <button onClick={() => { if (confirm(`Clear counts in Obs ${obs + 1} · ${CELLS[active]}?`)) dispatch({ type: "clearCell" }); }} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">↺ Clear this cell</button>
+        <button onClick={() => { if (confirm(`Clear counts in Obs ${obs + 1} · ${CELLS[active]}?`)) { dispatch({ type: "clearCell" }); setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; }); } }} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">↺ Clear this cell</button>
       </div>
 
       <button onClick={clearDay} className="w-full mt-2 py-2.5 rounded-xl bg-red-950/40 border border-red-900 text-red-300 hover:bg-red-900/40 text-sm">
