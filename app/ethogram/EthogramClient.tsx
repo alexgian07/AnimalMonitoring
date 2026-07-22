@@ -172,6 +172,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   /* ---- recording ---- */
   async function toggleRecord() {
     if (recState === "recording") { mediaRef.current?.stop(); return; }
+    // Redo: if this cell already has counts, a fresh recording replaces them (no accumulating).
+    if (data[obs][active].some((v) => v > 0)) dispatch({ type: "clearCell" });
     try {
       if (!streamRef.current)
         streamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -341,10 +343,18 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               ? "bg-red-500 text-white animate-pulse"
               : recState === "busy"
                 ? "bg-gray-800 text-gray-400"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                : cellTotal > 0
+                  ? "bg-amber-600 hover:bg-amber-500 text-white"
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white"
           }`}
         >
-          {recState === "recording" ? "⏹ Stop & transcribe" : recState === "busy" ? "… transcribing" : `🎤 Record — Obs ${obs + 1} · ${CELLS[active]}`}
+          {recState === "recording"
+            ? "⏹ Stop & transcribe"
+            : recState === "busy"
+              ? "… transcribing"
+              : cellTotal > 0
+                ? `↻ Redo — Obs ${obs + 1} · ${CELLS[active]}`
+                : `🎤 Record — Obs ${obs + 1} · ${CELLS[active]}`}
         </button>
         <button onClick={() => dispatch({ type: "next" })} className="flex-none w-[88px] rounded-2xl bg-gray-800 hover:bg-gray-700 font-bold">
           Next ▸
