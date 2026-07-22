@@ -1,0 +1,24 @@
+{
+  "//": "Copy this file to .mcp.json (git-ignored) and paste your real Supabase token below.",
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=gtbyspehkcdypuioivha"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_PASTE_YOUR_TOKEN_HERE"
+      }
+    },
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    },
+    "clerk": {
+      "type": "http",
+      "url": "https://mcp.clerk.com/mcp"
+    }
+  }
+}
