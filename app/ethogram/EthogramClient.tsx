@@ -141,8 +141,6 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   type PastSession = { date: string; ampm: string; status: string; sheetTab: string | null; updatedAt: string; filled: number };
   const [showPast, setShowPast] = useState(false);
   const [pastSessions, setPastSessions] = useState<PastSession[] | null>(null);
-  // offered after a commit collides with a tab THIS app previously committed (guarded overwrite)
-  const [showReplace, setShowReplace] = useState(false);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -179,7 +177,6 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // and reset the grid whenever the session identity changes.
   useEffect(() => {
     hydratingRef.current = true;              // block the autosave tick this render triggers
-    setShowReplace(false);                    // stale replace offer must not survive a session switch
     let cancelled = false;
     (async () => {
       try {
@@ -407,7 +404,6 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function commit() {
     if (!confirm(`Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/48 cells have data.`)) return;
-    setShowReplace(false);
     setNote("Committing " + tabName() + "…");
     try {
       const res = await fetch("/api/ethogram/commit", {
@@ -417,15 +413,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       });
       const d = await res.json();
       if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); }
-      else if (d.code === "TAB_EXISTS") {
-        if (sessionStatus === "committed") {
-          // this app committed this day before → offer a guarded overwrite
-          setNote(`⚠ Tab ${tabName()} already exists. You committed this day before — use Replace to overwrite it.`);
-          setShowReplace(true);
-        } else {
-          setNote(`⚠ Tab ${tabName()} already exists (not created here) — rename or delete it in Google Sheets first.`);
-        }
-      }
+      // A collision on a NOT-yet-committed day means a foreign/manual tab — never auto-overwrite.
+      else if (d.code === "TAB_EXISTS")
+        setNote(`⚠ Tab ${tabName()} already exists (not created here) — rename or delete it in Google Sheets first.`);
       else setNote("⚠ " + (d.error || "commit failed"));
     } catch (e) {
       setNote("⚠ " + e);
@@ -446,8 +436,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm, replace: true }),
       });
       const d = await res.json();
-      if (res.ok) { setNote("✓ Replaced tab " + d.committed.tab); setSessionStatus("committed"); setShowReplace(false); }
-      else if (d.code === "NOT_APP_OWNED" || d.code === "TAB_SHAPE_MISMATCH") { setNote("⚠ " + d.error); setShowReplace(false); }
+      if (res.ok) { setNote("✓ Replaced tab " + d.committed.tab); setSessionStatus("committed"); }
+      else if (d.code === "NOT_APP_OWNED" || d.code === "TAB_SHAPE_MISMATCH") setNote("⚠ " + d.error);
       else setNote("⚠ " + (d.error || "replace failed"));
     } catch (e) {
       setNote("⚠ " + e);
@@ -622,17 +612,15 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
       {commitEnabled && (
         <div className="flex mt-2">
-          <button onClick={commit} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold">
-            ⬆ Commit day to Google Sheets
-          </button>
-        </div>
-      )}
-
-      {commitEnabled && showReplace && (
-        <div className="flex mt-2">
-          <button onClick={replaceCommit} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">
-            ♻ Replace existing “{tabName()}” tab (overwrites it)
-          </button>
+          {sessionStatus === "committed" ? (
+            <button onClick={replaceCommit} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">
+              ♻ Replace committed “{tabName()}” tab (overwrites it)
+            </button>
+          ) : (
+            <button onClick={commit} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold">
+              ⬆ Commit day to Google Sheets
+            </button>
+          )}
         </div>
       )}
 

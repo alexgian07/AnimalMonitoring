@@ -145,9 +145,10 @@ correction path **without** risking a sheet the app didn't create (a manually-ma
 that happens to share the `D-M Π/Μ` name).
 
 **Decision.** Additive-only stays the **default**. Add one **guarded overwrite** path:
-- The default `Commit` still calls `commitDay` → refuses on any name collision. On a `TAB_EXISTS`
-  response the client offers a **Replace** button *only if this session's status is `committed`*
-  (i.e. the app itself committed this day); otherwise it just tells the user to rename/delete in Sheets.
+- A day already marked `committed` shows **Replace** as its primary action button (in place of
+  Commit), which warns on click. A not-yet-committed day shows **Commit** (additive `commitDay`); if
+  that collides with an existing (foreign/manual) tab it's refused with a rename/delete message —
+  never an auto-overwrite.
 - `Replace` posts `{replace:true}`. The server **verifies ownership against Supabase** (a `committed`
   `ethogram_sessions` row for this user+date+AM/PM whose `sheet_tab` matches) — client claims are not
   trusted. If not owned → `409 NOT_APP_OWNED`, refuse.

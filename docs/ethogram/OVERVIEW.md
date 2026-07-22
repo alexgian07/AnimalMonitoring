@@ -97,8 +97,9 @@ crash-recovery safety net + audit trail.
    (grid + per-cell transcripts reload). The date picker **resets to today on load** by design.
 8. **Commit** → `/api/ethogram/commit` → a new `D-M Π/Μ` tab with all 48 rows, an **A1 note** naming
    who committed, and the session marked `committed`. Or **Copy for Excel** for a manual paste.
-   If the tab already exists: a tab the **app previously committed** shows a **♻ Replace** button
-   (guarded overwrite, ADR 0007); a **foreign** tab is refused (rename/delete it in Sheets first).
+   A day already **committed** shows **♻ Replace** as its primary button (guarded overwrite, warns on
+   click; ADR 0007) instead of Commit. A first commit that collides with a **foreign/manual** tab is
+   refused (rename/delete it in Sheets first).
 9. **Clear whole day** wipes the grid and deletes the saved session (+ its transcripts). It **never
    touches Google Sheets** — deleting an already-committed tab stays a manual step in Sheets.
 
