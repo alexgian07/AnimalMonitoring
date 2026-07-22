@@ -88,8 +88,9 @@ crash-recovery safety net + audit trail.
 3. **Stop** → audio POSTed to `/api/ethogram/transcribe` → Groq Whisper → transcript.
 4. `parseToOps(transcript)` → ops → reducer updates the cell's counts. The transcript is shown so
    she can verify; **＋/−** buttons fix anything by hand.
-5. **Redo semantics**: recording a cell that already has counts **clears it first** (button shows
-   amber "↻ Redo") — a second pass **replaces**, never accumulates.
+5. **Redo semantics**: for a filled cell the primary button becomes **Next ▸** and re-recording is a
+   small secondary **↻ Redo** (with a confirm) that clears the cell first — a second pass **replaces**,
+   never accumulates. (Slow fetches show a spinner; commit/replace show an in-button spinner.)
 6. **Next ▸** walks K1→K8, then rolls into the next observation.
 7. **Autosave (Supabase):** every grid change is debounced (~1.5s) and upserted to
    `ethogram_sessions`; each transcript is appended to `ethogram_recordings`. The header shows

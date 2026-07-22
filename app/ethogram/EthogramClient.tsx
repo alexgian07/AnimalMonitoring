@@ -39,6 +39,11 @@ const normalizeGrid = (raw: unknown): number[][][] => {
   return g;
 };
 
+// small inline spinner; inherits text color via border-current
+const Spinner = ({ className = "" }: { className?: string }) => (
+  <span className={`inline-block animate-spin rounded-full border-2 border-current border-t-transparent ${className}`} />
+);
+
 type Action =
   | { type: "ops"; ops: Op[] }
   | { type: "bump"; beh: number; d: number }
@@ -134,6 +139,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [sessionStatus, setSessionStatus] = useState<"draft" | "committed" | null>(null);
   // true when a committed session has local edits not yet pushed to the Sheet (updated_at > committed_at)
   const [dirtySinceCommit, setDirtySinceCommit] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);   // resume/reconcile fetch in flight
+  const [committing, setCommitting] = useState(false);          // commit/replace request in flight
   const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
   const saveTimerRef = useRef<number | null>(null);
   // saved transcript per cell, keyed `${obs}-${cell}` (0-based); shown on resume
@@ -179,6 +186,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // and reset the grid whenever the session identity changes.
   useEffect(() => {
     hydratingRef.current = true;              // block the autosave tick this render triggers
+    setLoadingSession(true);
     let cancelled = false;
     (async () => {
       try {
@@ -213,6 +221,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         setSaveState("idle");
       } catch {
         if (!cancelled) hydratingRef.current = false;   // load failed → allow normal saving
+      } finally {
+        if (!cancelled) setLoadingSession(false);
       }
     })();
     return () => { cancelled = true; };
@@ -286,12 +296,13 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   /* ---- recording ---- */
   async function toggleRecord() {
     if (recState === "recording") { mediaRef.current?.stop(); return; }
-    recCellRef.current = { obs, cell: active };   // the cell this clip belongs to
     // Redo: if this cell already has counts, a fresh recording replaces them (no accumulating).
     if (data[obs][active].some((v) => v > 0)) {
+      if (!confirm(`Re-record Obs ${obs + 1} · ${CELLS[active]}?\nIts current counts will be cleared and replaced.`)) return;
       dispatch({ type: "clearCell" });
       setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; });
     }
+    recCellRef.current = { obs, cell: active };   // the cell this clip belongs to
     try {
       if (!streamRef.current)
         streamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -414,6 +425,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function commit() {
     if (!confirm(`Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/48 cells have data.`)) return;
+    setCommitting(true);
     setNote("Committing " + tabName() + "…");
     try {
       const res = await fetch("/api/ethogram/commit", {
@@ -429,6 +441,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       else setNote("⚠ " + (d.error || "commit failed"));
     } catch (e) {
       setNote("⚠ " + e);
+    } finally {
+      setCommitting(false);
     }
     setTimeout(() => setNote(""), 6000);
   }
@@ -438,6 +452,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       `Replace the existing tab "${tabName()}" in Google Sheets?\n\n` +
       `Its 48 rows will be overwritten with the current data. Google Sheets keeps version history if you need to undo.`,
     )) return;
+    setCommitting(true);
     setNote("Replacing " + tabName() + "…");
     try {
       const res = await fetch("/api/ethogram/commit", {
@@ -451,6 +466,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       else setNote("⚠ " + (d.error || "replace failed"));
     } catch (e) {
       setNote("⚠ " + e);
+    } finally {
+      setCommitting(false);
     }
     setTimeout(() => setNote(""), 6000);
   }
@@ -507,6 +524,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         </span>
       </div>
 
+      {loadingSession && (
+        <div className="flex items-center gap-2 text-xs text-gray-400 mb-3 -mt-1">
+          <Spinner className="h-4 w-4 text-emerald-400" /> Loading session…
+        </div>
+      )}
+
       {dateInFuture && (
         <div className="text-[11px] text-amber-400 mb-3 -mt-2">⚠ This date is in the future — check it's the right day.</div>
       )}
@@ -543,30 +566,40 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
       {/* record + next */}
       <div className="flex gap-2 my-2">
-        <button
-          onClick={toggleRecord}
-          disabled={recState === "busy"}
-          className={`flex-1 py-5 rounded-2xl text-lg font-bold transition-colors ${
-            recState === "recording"
-              ? "bg-red-500 text-white animate-pulse"
-              : recState === "busy"
-                ? "bg-gray-800 text-gray-400"
-                : cellTotal > 0
-                  ? "bg-amber-600 hover:bg-amber-500 text-white"
-                  : "bg-emerald-600 hover:bg-emerald-500 text-white"
-          }`}
-        >
-          {recState === "recording"
-            ? "⏹ Stop & transcribe"
-            : recState === "busy"
-              ? "… transcribing"
-              : cellTotal > 0
-                ? `↻ Redo — Obs ${obs + 1} · ${CELLS[active]}`
-                : `🎤 Record — Obs ${obs + 1} · ${CELLS[active]}`}
-        </button>
-        <button onClick={() => dispatch({ type: "next" })} className="flex-none w-[88px] rounded-2xl bg-gray-800 hover:bg-gray-700 font-bold">
-          Next ▸
-        </button>
+        {recState === "idle" && cellTotal > 0 ? (
+          // filled cell → moving on is the usual action, so Next is primary and Redo is a small secondary
+          <>
+            <button onClick={() => dispatch({ type: "next" })} className="flex-1 py-5 rounded-2xl text-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white">
+              Next ▸
+            </button>
+            <button onClick={toggleRecord} className="flex-none px-4 py-5 rounded-2xl bg-gray-800 hover:bg-gray-700 text-amber-300 text-sm font-semibold">
+              ↻ Redo
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={toggleRecord}
+              disabled={recState === "busy"}
+              className={`flex-1 py-5 rounded-2xl text-lg font-bold transition-colors ${
+                recState === "recording"
+                  ? "bg-red-500 text-white animate-pulse"
+                  : recState === "busy"
+                    ? "bg-gray-800 text-gray-400"
+                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
+              }`}
+            >
+              {recState === "recording"
+                ? "⏹ Stop & transcribe"
+                : recState === "busy"
+                  ? "… transcribing"
+                  : `🎤 Record — Obs ${obs + 1} · ${CELLS[active]}`}
+            </button>
+            <button onClick={() => dispatch({ type: "next" })} className="flex-none w-[88px] rounded-2xl bg-gray-800 hover:bg-gray-700 font-bold">
+              Next ▸
+            </button>
+          </>
+        )}
       </div>
 
       {/* cancel: discard the current take without transcribing */}
@@ -627,12 +660,14 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       {commitEnabled && (
         <div className="flex mt-2">
           {sessionStatus === "committed" ? (
-            <button onClick={replaceCommit} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">
-              ♻ Replace committed “{tabName()}” tab (overwrites it)
+            <button onClick={replaceCommit} disabled={committing} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white font-bold flex items-center justify-center gap-2">
+              {committing && <Spinner className="h-4 w-4" />}
+              {committing ? "Replacing…" : `♻ Replace committed “${tabName()}” tab (overwrites it)`}
             </button>
           ) : (
-            <button onClick={commit} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold">
-              ⬆ Commit day to Google Sheets
+            <button onClick={commit} disabled={committing} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-emerald-950 font-bold flex items-center justify-center gap-2">
+              {committing && <Spinner className="h-4 w-4" />}
+              {committing ? "Committing…" : "⬆ Commit day to Google Sheets"}
             </button>
           )}
         </div>
@@ -650,7 +685,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       {showPast && (
         <div className="mt-2 border border-gray-800 rounded-lg divide-y divide-gray-800 max-h-[50vh] overflow-auto">
           {pastSessions === null ? (
-            <div className="px-3 py-3 text-sm text-gray-400">Loading…</div>
+            <div className="px-3 py-3 text-sm text-gray-400 flex items-center gap-2"><Spinner className="h-4 w-4 text-emerald-400" /> Loading…</div>
           ) : pastSessions.length === 0 ? (
             <div className="px-3 py-3 text-sm text-gray-400">No saved sessions yet.</div>
           ) : (
