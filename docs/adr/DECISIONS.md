@@ -162,6 +162,10 @@ that happens to share the `D-M Π/Μ` name).
   and a fresh commit is allowed again.
 - **Future-date guard:** a soft amber warning when the picked date is after today (typo catch). Past
   dates stay fully allowed (back-filling a missed observation day is legitimate).
+- **Edited-since-commit indicator:** commit sets `committed_at == updated_at`, so a later autosave makes
+  `updated_at > committed_at`. A committed session in that state shows an amber **"✎ edited since
+  commit"** badge (instead of "✓ committed") — signalling local edits not yet in the Sheet, which
+  the ♻ Replace button pushes. Detected purely from the two timestamps; no extra columns.
 
 **Consequences.** Two independent checks (Supabase ownership + A1 shape) must both pass before any
 overwrite, so a foreign/manual tab is never clobbered from the app. The correction workflow is now

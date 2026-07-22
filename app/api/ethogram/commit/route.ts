@@ -66,6 +66,9 @@ export async function POST(req: NextRequest) {
     if (sessionDate && timeOfDay) {
       try {
         const supabase = await createServerClient();
+        // Same timestamp for both so `updated_at > committed_at` cleanly means "edited AFTER commit"
+        // (that comparison drives the client's "✎ edited since commit" indicator).
+        const nowIso = new Date().toISOString();
         await supabase.from("ethogram_sessions").upsert(
           {
             user_id: userId,
@@ -74,8 +77,8 @@ export async function POST(req: NextRequest) {
             status: "committed",
             sheet_tab: tabName,
             committed_by: userId,
-            committed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            committed_at: nowIso,
+            updated_at: nowIso,
           },
           { onConflict: "user_id,session_date,time_of_day" },
         );

@@ -93,7 +93,8 @@ crash-recovery safety net + audit trail.
 6. **Next ▸** walks K1→K8, then rolls into the next observation.
 7. **Autosave (Supabase):** every grid change is debounced (~1.5s) and upserted to
    `ethogram_sessions`; each transcript is appended to `ethogram_recordings`. The header shows
-   `saving… / saved ✓`. A refresh/crash loses nothing — reselect the same date + AM/PM to **resume**
+   `saving… / saved ✓` (or `✓ committed`, or amber `✎ edited since commit` once a committed day is
+   edited again — ADR 0007). A refresh/crash loses nothing — reselect the same date + AM/PM to **resume**
    (grid + per-cell transcripts reload). The date picker **resets to today on load** by design.
 8. **Commit** → `/api/ethogram/commit` → a new `D-M Π/Μ` tab with all 48 rows, an **A1 note** naming
    who committed, and the session marked `committed`. Or **Copy for Excel** for a manual paste.

@@ -132,6 +132,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // persistence: autosave / resume
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [sessionStatus, setSessionStatus] = useState<"draft" | "committed" | null>(null);
+  // true when a committed session has local edits not yet pushed to the Sheet (updated_at > committed_at)
+  const [dirtySinceCommit, setDirtySinceCommit] = useState(false);
   const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
   const saveTimerRef = useRef<number | null>(null);
   // saved transcript per cell, keyed `${obs}-${cell}` (0-based); shown on resume
@@ -196,6 +198,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           dispatch({ type: "hydrate", data: emptyGrid() });
           setSessionStatus(null);
         }
+        // committed session with edits after the commit → "edited since commit"
+        setDirtySinceCommit(
+          d.session?.status === "committed" &&
+          !!d.session.updated_at && !!d.session.committed_at &&
+          d.session.updated_at > d.session.committed_at,
+        );
         // rebuild the per-cell transcript map (obs/cell come back 1-based)
         const tmap: Record<string, string> = {};
         for (const r of (d.recordings ?? []) as { obs: number; cell: number; transcript: string }[])
@@ -215,6 +223,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     if (hydratingRef.current) { hydratingRef.current = false; return; }   // skip loads
     const total = state.data.reduce((s, o) => s + o.reduce((s2, c) => s2 + c.reduce((a, b) => a + b, 0), 0), 0);
     if (total === 0) return;                  // nothing worth persisting yet
+    if (sessionStatus === "committed") setDirtySinceCommit(true);   // edits diverge from the Sheet
     setSaveState("saving");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(async () => {
@@ -412,7 +421,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm }),
       });
       const d = await res.json();
-      if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); }
+      if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); setDirtySinceCommit(false); }
       // A collision on a NOT-yet-committed day means a foreign/manual tab — never auto-overwrite.
       else if (d.code === "TAB_EXISTS")
         setNote(`⚠ Tab ${tabName()} already exists (not created here) — rename or delete it in Google Sheets first.`);
@@ -436,7 +445,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm, replace: true }),
       });
       const d = await res.json();
-      if (res.ok) { setNote("✓ Replaced tab " + d.committed.tab); setSessionStatus("committed"); }
+      if (res.ok) { setNote("✓ Replaced tab " + d.committed.tab); setSessionStatus("committed"); setDirtySinceCommit(false); }
       else if (d.code === "NOT_APP_OWNED" || d.code === "TAB_SHAPE_MISMATCH") setNote("⚠ " + d.error);
       else setNote("⚠ " + (d.error || "replace failed"));
     } catch (e) {
@@ -479,9 +488,13 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         </div>
         <span className="ml-auto flex flex-col items-end leading-tight">
           <span className="font-bold text-emerald-400">{tabName()}</span>
-          <span className="text-[10px] h-3 text-gray-400">
+          <span className={`text-[10px] h-3 ${
+            sessionStatus === "committed" && dirtySinceCommit ? "text-amber-400"
+              : sessionStatus === "committed" ? "text-emerald-400"
+                : saveState === "error" ? "text-red-400" : "text-gray-400"
+          }`}>
             {sessionStatus === "committed"
-              ? "✓ committed"
+              ? (dirtySinceCommit ? "✎ edited since commit" : "✓ committed")
               : saveState === "saving"
                 ? "saving…"
                 : saveState === "saved"
