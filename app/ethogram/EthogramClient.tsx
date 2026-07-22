@@ -141,6 +141,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   type PastSession = { date: string; ampm: string; status: string; sheetTab: string | null; updatedAt: string; filled: number };
   const [showPast, setShowPast] = useState(false);
   const [pastSessions, setPastSessions] = useState<PastSession[] | null>(null);
+  // offered after a commit collides with a tab THIS app previously committed (guarded overwrite)
+  const [showReplace, setShowReplace] = useState(false);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -177,6 +179,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // and reset the grid whenever the session identity changes.
   useEffect(() => {
     hydratingRef.current = true;              // block the autosave tick this render triggers
+    setShowReplace(false);                    // stale replace offer must not survive a session switch
     let cancelled = false;
     (async () => {
       try {
@@ -254,6 +257,11 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // status/instruction/error text. Derived (not stored) so it's always right for this cell.
   const activeTranscript = transcripts[`${obs}-${active}`];
   const boxText = recState === "idle" && !heard.err && activeTranscript ? activeTranscript : heard.text;
+  const todayStr = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+  const dateInFuture = !!dateStr && dateStr > todayStr;
 
   const buildRows = (): (string | number)[][] => {
     const head = ["OBSERV.", "Cell", ...BEHAVIOURS.map((b) => b.name)];
@@ -399,6 +407,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function commit() {
     if (!confirm(`Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/48 cells have data.`)) return;
+    setShowReplace(false);
     setNote("Committing " + tabName() + "…");
     try {
       const res = await fetch("/api/ethogram/commit", {
@@ -408,12 +417,42 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       });
       const d = await res.json();
       if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); }
-      else if (d.code === "TAB_EXISTS") setNote("⚠ Tab " + tabName() + " already exists — rename or delete it first");
+      else if (d.code === "TAB_EXISTS") {
+        if (sessionStatus === "committed") {
+          // this app committed this day before → offer a guarded overwrite
+          setNote(`⚠ Tab ${tabName()} already exists. You committed this day before — use Replace to overwrite it.`);
+          setShowReplace(true);
+        } else {
+          setNote(`⚠ Tab ${tabName()} already exists (not created here) — rename or delete it in Google Sheets first.`);
+        }
+      }
       else setNote("⚠ " + (d.error || "commit failed"));
     } catch (e) {
       setNote("⚠ " + e);
     }
-    setTimeout(() => setNote(""), 4000);
+    setTimeout(() => setNote(""), 6000);
+  }
+
+  async function replaceCommit() {
+    if (!confirm(
+      `Replace the existing tab "${tabName()}" in Google Sheets?\n\n` +
+      `Its 48 rows will be overwritten with the current data. Google Sheets keeps version history if you need to undo.`,
+    )) return;
+    setNote("Replacing " + tabName() + "…");
+    try {
+      const res = await fetch("/api/ethogram/commit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm, replace: true }),
+      });
+      const d = await res.json();
+      if (res.ok) { setNote("✓ Replaced tab " + d.committed.tab); setSessionStatus("committed"); setShowReplace(false); }
+      else if (d.code === "NOT_APP_OWNED" || d.code === "TAB_SHAPE_MISMATCH") { setNote("⚠ " + d.error); setShowReplace(false); }
+      else setNote("⚠ " + (d.error || "replace failed"));
+    } catch (e) {
+      setNote("⚠ " + e);
+    }
+    setTimeout(() => setNote(""), 6000);
   }
 
   /* ---------------- render ---------------- */
@@ -463,6 +502,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           </span>
         </span>
       </div>
+
+      {dateInFuture && (
+        <div className="text-[11px] text-amber-400 mb-3 -mt-2">⚠ This date is in the future — check it's the right day.</div>
+      )}
 
       {/* observation selector */}
       <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5 mt-2">Observation</div>
@@ -581,6 +624,14 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <div className="flex mt-2">
           <button onClick={commit} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold">
             ⬆ Commit day to Google Sheets
+          </button>
+        </div>
+      )}
+
+      {commitEnabled && showReplace && (
+        <div className="flex mt-2">
+          <button onClick={replaceCommit} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold">
+            ♻ Replace existing “{tabName()}” tab (overwrites it)
           </button>
         </div>
       )}

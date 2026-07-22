@@ -131,3 +131,39 @@ and re-parsing. Note the date picker **resets to today on load** (sensible defau
 different day means reselecting its date + AM/PM. Autosave skips a fully-empty grid (no empty rows).
 The commit's session-status update and the transcript save are **best-effort** (a failure never
 blocks the commit or the UI) since the Sheet remains authoritative.
+
+---
+
+## ADR 0007 — Re-commit policy: guarded in-app Replace for app-owned tabs; never touch foreign tabs
+
+**Status:** Accepted (implemented 2026-07-22). Extends ADR 0005 (additive-only) rather than replacing it.
+
+**Context.** ADR 0005 makes commits additive: a tab-name collision throws `TabExistsError` (409) and
+the user must delete/rename the tab in Sheets to re-commit. That's safe but friction-heavy for the
+common correction case ("I committed a day, spotted a mistake, want to re-push"). We want an in-app
+correction path **without** risking a sheet the app didn't create (a manually-made or pre-existing tab
+that happens to share the `D-M Π/Μ` name).
+
+**Decision.** Additive-only stays the **default**. Add one **guarded overwrite** path:
+- The default `Commit` still calls `commitDay` → refuses on any name collision. On a `TAB_EXISTS`
+  response the client offers a **Replace** button *only if this session's status is `committed`*
+  (i.e. the app itself committed this day); otherwise it just tells the user to rename/delete in Sheets.
+- `Replace` posts `{replace:true}`. The server **verifies ownership against Supabase** (a `committed`
+  `ethogram_sessions` row for this user+date+AM/PM whose `sheet_tab` matches) — client claims are not
+  trusted. If not owned → `409 NOT_APP_OWNED`, refuse.
+- `replaceTab` then applies a **second, independent guard**: it reads the target tab's `A1` and only
+  overwrites if it equals `"OBSERV."` (looks like our template); otherwise `409 TAB_SHAPE_MISMATCH`.
+  It clears the tab's range and rewrites the 48 rows + refreshes the A1 note ("Re-committed by …").
+- **Undo safety net = Google Sheets version history** (consistent with ADR 0005; the app still never
+  *deletes* a tab).
+- **Badge reconciliation:** on resume, a `committed` session whose `sheet_tab` no longer exists in the
+  Sheet is quietly reverted to `draft` (best-effort, committed-sessions only) so the badge can't lie
+  and a fresh commit is allowed again.
+- **Future-date guard:** a soft amber warning when the picked date is after today (typo catch). Past
+  dates stay fully allowed (back-filling a missed observation day is legitimate).
+
+**Consequences.** Two independent checks (Supabase ownership + A1 shape) must both pass before any
+overwrite, so a foreign/manual tab is never clobbered from the app. The correction workflow is now
+in-app. The Sheet remains the system of record and the authority on whether a commit can proceed;
+Supabase only *gates the Replace offer*. `values.clear` covers `A1:Z100`, so a replaced tab can't keep
+stale cells beyond the 49×~25 grid.

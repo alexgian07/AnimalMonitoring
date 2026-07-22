@@ -60,10 +60,10 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 | File | Role |
 |---|---|
 | `lib/ethogram/parser.ts` | Pure, framework-free parser. `parseToOps(text)` → list of ops (add / addLast / undo / setLast / cell / next). Also exports `BEHAVIOURS`, `CELLS`, `OBS`. Fully unit-testable. |
-| `lib/ethogram/sheets.ts` | `commitDay(spreadsheetId, tabName, rows, note?)` via `googleapis` + a service account. Adds a new tab; **throws `TabExistsError` (409) rather than overwrite**. Optional `note` → an A1 cell note (who committed). Creds from `GOOGLE_CREDENTIALS` env. |
+| `lib/ethogram/sheets.ts` | `commitDay(…, note?)` adds a new tab (**throws `TabExistsError` (409) rather than overwrite**; optional A1 `note`). `replaceTab(…)` overwrites an existing app-owned tab (guard: A1 must be `"OBSERV."`, else `TabShapeError`; falls back to create if the tab vanished). `tabExists(…)` checks a tab name. Creds from `GOOGLE_CREDENTIALS`. |
 | `app/api/ethogram/transcribe/route.ts` | Clerk-guarded. POST audio → Groq Whisper → `{text}`. `runtime = "nodejs"`. |
-| `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows, sessionDate, timeOfDay}` → `commitDay` (with committer A1 note) + marks the session `committed` in Supabase. |
-| `app/api/ethogram/session/route.ts` | Clerk-guarded. `POST` autosaves the working grid (upsert on the natural key); `GET ?date=&ampm=` resumes it **plus its transcripts**; `DELETE` clears a whole day (session + recordings; never touches the Sheet). |
+| `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows, sessionDate, timeOfDay, replace?}`. Default → `commitDay` (additive). `replace:true` → verifies the session is app-`committed` (Supabase) then `replaceTab`; refuses foreign tabs (`NOT_APP_OWNED`). Writes committer A1 note + marks session `committed`. |
+| `app/api/ethogram/session/route.ts` | Clerk-guarded. `POST` autosaves the working grid (upsert on the natural key); `GET ?date=&ampm=` resumes it **plus its transcripts**, and **reconciles** a stale `committed` badge (reverts to `draft` if its tab no longer exists in the Sheet); `DELETE` clears a whole day (session + recordings; never touches the Sheet). |
 | `app/api/ethogram/recording/route.ts` | Clerk-guarded. `POST {date, ampm, obs, cell, transcript}` appends a transcript to `ethogram_recordings` (audit trail). |
 | `app/api/ethogram/sessions/route.ts` | Clerk-guarded. `GET` lists the caller's saved sessions (most recent first, + filled-cell count) for the past-sessions browser. |
 | `app/ethogram/page.tsx` | Server component; reads env to decide `commitEnabled`. |
@@ -97,6 +97,8 @@ crash-recovery safety net + audit trail.
    (grid + per-cell transcripts reload). The date picker **resets to today on load** by design.
 8. **Commit** → `/api/ethogram/commit` → a new `D-M Π/Μ` tab with all 48 rows, an **A1 note** naming
    who committed, and the session marked `committed`. Or **Copy for Excel** for a manual paste.
+   If the tab already exists: a tab the **app previously committed** shows a **♻ Replace** button
+   (guarded overwrite, ADR 0007); a **foreign** tab is refused (rename/delete it in Sheets first).
 9. **Clear whole day** wipes the grid and deletes the saved session (+ its transcripts). It **never
    touches Google Sheets** — deleting an already-committed tab stays a manual step in Sheets.
 

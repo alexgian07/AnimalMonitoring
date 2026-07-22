@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { commitDay, type Row } from "@/lib/ethogram/sheets";
+import { commitDay, replaceTab, type Row } from "@/lib/ethogram/sheets";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const rows: Row[] = body.rows;
     const sessionDate: string | undefined = body.sessionDate;
     const timeOfDay: string | undefined = body.timeOfDay;
+    const replace: boolean = body.replace === true;
     if (!tabName || !Array.isArray(rows)) throw new Error("Missing tabName/rows");
 
     // Resolve who is committing, from Clerk, for the A1 note + audit trail. Best-effort.
@@ -32,9 +33,34 @@ export async function POST(req: NextRequest) {
       /* name resolution is best-effort; fall back to the user id below */
     }
     const stamp = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
-    const note = `Committed by ${who || userId} · ${stamp}`;
+    const note = `${replace ? "Re-committed" : "Committed"} by ${who || userId} · ${stamp}`;
 
-    const committed = await commitDay(spreadsheetId, tabName, rows, note);
+    let committed;
+    if (replace) {
+      // Guarded correction path: only allow replacing a tab THIS APP committed. Verify against
+      // Supabase server-side (don't trust the client) so we never overwrite a foreign/manual tab.
+      if (!sessionDate || !timeOfDay) throw new Error("Missing sessionDate/timeOfDay for replace");
+      const supabase = await createServerClient();
+      const { data: sess } = await supabase
+        .from("ethogram_sessions")
+        .select("status, sheet_tab")
+        .eq("user_id", userId)
+        .eq("session_date", sessionDate)
+        .eq("time_of_day", timeOfDay)
+        .maybeSingle();
+      if (!sess || sess.status !== "committed" || sess.sheet_tab !== tabName) {
+        return NextResponse.json(
+          {
+            error: `Tab "${tabName}" wasn't created by this app — rename or delete it in Google Sheets first.`,
+            code: "NOT_APP_OWNED",
+          },
+          { status: 409 },
+        );
+      }
+      committed = await replaceTab(spreadsheetId, tabName, rows, note);
+    } else {
+      committed = await commitDay(spreadsheetId, tabName, rows, note); // throws TabExistsError if it exists
+    }
 
     // Mark the session committed (audit). Never fail the commit over this.
     if (sessionDate && timeOfDay) {
@@ -61,9 +87,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ committed });
   } catch (e) {
     const err = e as Error & { code?: string };
+    const known = err.code === "TAB_EXISTS" || err.code === "TAB_SHAPE_MISMATCH";
     return NextResponse.json(
       { error: err.message, code: err.code ?? null },
-      { status: err.code === "TAB_EXISTS" ? 409 : 500 },
+      { status: known ? 409 : 500 },
     );
   }
 }

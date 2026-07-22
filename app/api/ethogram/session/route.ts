@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { tabExists } from "@/lib/ethogram/sheets";
 
 export const runtime = "nodejs";
 
@@ -17,14 +18,37 @@ export async function GET(req: NextRequest) {
 
   try {
     const supabase = await createServerClient();
-    const { data: session, error } = await supabase
+    const sessionRes = await supabase
       .from("ethogram_sessions")
       .select("id, data, status, sheet_tab, committed_at, updated_at")
       .eq("user_id", userId)
       .eq("session_date", date)
       .eq("time_of_day", ampm)
       .maybeSingle();
-    if (error) throw error;
+    if (sessionRes.error) throw sessionRes.error;
+    let session = sessionRes.data;
+
+    // Reconcile the committed badge with reality: if a session we marked committed no longer has
+    // its tab in the Sheet (deleted/renamed there), quietly revert it to draft. Best-effort, and
+    // only for committed sessions so drafts don't pay a Sheets round-trip.
+    if (
+      session?.status === "committed" && session.sheet_tab &&
+      process.env.GSHEET_ID && process.env.GOOGLE_CREDENTIALS
+    ) {
+      try {
+        if (!(await tabExists(process.env.GSHEET_ID, session.sheet_tab))) {
+          await supabase
+            .from("ethogram_sessions")
+            .update({ status: "draft", sheet_tab: null, committed_at: null, committed_by: null, updated_at: new Date().toISOString() })
+            .eq("user_id", userId)
+            .eq("session_date", date)
+            .eq("time_of_day", ampm);
+          session = { ...session, status: "draft", sheet_tab: null, committed_at: null };
+        }
+      } catch {
+        /* reconciliation is best-effort — never block a resume over it */
+      }
+    }
 
     // Also return the transcript history so the client can show what was said per cell.
     let recordings: { obs: number; cell: number; transcript: string }[] = [];
