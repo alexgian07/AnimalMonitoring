@@ -246,6 +246,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     return n;
   };
   const cellTotal = data[obs][active].reduce((a, b) => a + b, 0);
+  // The status box shows the CURRENT cell's saved transcript when idle; otherwise the live
+  // status/instruction/error text. Derived (not stored) so it's always right for this cell.
+  const activeTranscript = transcripts[`${obs}-${active}`];
+  const boxText = recState === "idle" && !heard.err && activeTranscript ? activeTranscript : heard.text;
 
   const buildRows = (): (string | number)[][] => {
     const head = ["OBSERV.", "Cell", ...BEHAVIOURS.map((b) => b.name)];
@@ -307,10 +311,11 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         const d = await res.json();
         if (d.text != null) {
           const text = d.text.trim();
-          setHeard({ text: text || "(nothing heard)" });
           dispatch({ type: "ops", ops: parseToOps(d.text) });
           if (text) {
             const { obs: ro, cell: rc } = recCellRef.current;
+            // transcript is shown via the (derived) status box; reset heard to the prompt
+            setHeard({ text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
             setTranscripts((m) => ({ ...m, [`${ro}-${rc}`]: text }));
             // persist the transcript (audit trail); best-effort, never blocks the UI
             fetch("/api/ethogram/recording", {
@@ -318,6 +323,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ date: dateStr, ampm, obs: ro + 1, cell: rc + 1, transcript: text }),
             }).catch(() => {});
+          } else {
+            setHeard({ text: "(nothing heard)" });
           }
         } else {
           setHeard({ text: "⚠ " + (d.error?.message || d.error || JSON.stringify(d)), err: true });
@@ -515,9 +522,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         </div>
       )}
 
-      {/* heard */}
+      {/* status box — shows the current cell's saved transcript when idle, else live status */}
       <div className={`min-h-[44px] rounded-xl px-3 py-2.5 text-sm leading-snug mb-3 bg-gray-950 border border-gray-800 ${heard.err ? "text-red-400" : "text-gray-300"}`}>
-        {heard.text}
+        {recState === "idle" && activeTranscript ? <span className="text-gray-500 mr-1">🗣</span> : null}
+        {boxText}
       </div>
 
       {/* active cell list */}
@@ -525,9 +533,6 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <span className="font-bold">Obs {obs + 1} · {CELLS[active]}</span>
         <span className="text-xs text-gray-400">{cellTotal ? cellTotal + " scored" : ""}</span>
       </div>
-      {transcripts[`${obs}-${active}`] && (
-        <div className="text-[11px] text-gray-500 italic mb-1.5 leading-snug">🗣 “{transcripts[`${obs}-${active}`]}”</div>
-      )}
       <div className="flex flex-col gap-1.5">
         {BEHAVIOURS.map((b, bi) => {
           const v = data[obs][active][bi];
