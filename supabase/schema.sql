@@ -194,3 +194,66 @@ INSERT INTO locations (name, description, position, side) VALUES
   ('Κελί 6', 'Δεξιά πλευρά',    6, 'right'),
   ('Κελί 7', 'Δεξιά πλευρά',    7, 'right'),
   ('Κελί 8', 'Δεξιά πλευρά',    8, 'right');
+
+-- ============================================================
+-- ETHOGRAM VOICE-ENTRY PERSISTENCE
+-- (migration: ethogram_persistence — the /ethogram feature)
+-- Sessions autosave the live grid (crash recovery + resume);
+-- recordings are the per-clip transcript audit trail.
+-- Ownership-based RLS: each user manages only their own rows; admins may read all.
+-- ============================================================
+
+CREATE TABLE ethogram_sessions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      TEXT NOT NULL,                                    -- Clerk user id (owner/creator)
+  session_date DATE NOT NULL,
+  time_of_day  TEXT NOT NULL CHECK (time_of_day IN ('Π','Μ')),   -- Πρωί / Μεσημέρι
+  template     TEXT NOT NULL DEFAULT '22-july',
+  data         JSONB NOT NULL DEFAULT '[]'::jsonb,               -- [obs][cell][behaviour] grid, autosaved
+  status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','committed')),
+  sheet_tab    TEXT,                                             -- tab name once committed
+  committed_by TEXT,                                             -- Clerk user id who committed
+  committed_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, session_date, time_of_day)                    -- one session per (day, AM/PM) per user
+);
+
+CREATE TABLE ethogram_recordings (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id  UUID NOT NULL REFERENCES ethogram_sessions(id) ON DELETE CASCADE,
+  obs         SMALLINT NOT NULL CHECK (obs  BETWEEN 1 AND 6),
+  cell        SMALLINT NOT NULL CHECK (cell BETWEEN 1 AND 8),
+  transcript  TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_ethogram_sessions_user      ON ethogram_sessions(user_id);
+CREATE INDEX idx_ethogram_recordings_session ON ethogram_recordings(session_id);
+
+ALTER TABLE ethogram_sessions   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ethogram_recordings ENABLE ROW LEVEL SECURITY;
+
+-- SESSIONS: owner manages own rows; admins may read all
+CREATE POLICY "ethogram_sessions_select" ON ethogram_sessions
+  FOR SELECT USING (user_id = current_setting('request.jwt.claims', true)::json->>'sub' OR is_admin());
+CREATE POLICY "ethogram_sessions_insert" ON ethogram_sessions
+  FOR INSERT WITH CHECK (user_id = current_setting('request.jwt.claims', true)::json->>'sub');
+CREATE POLICY "ethogram_sessions_update" ON ethogram_sessions
+  FOR UPDATE USING (user_id = current_setting('request.jwt.claims', true)::json->>'sub');
+CREATE POLICY "ethogram_sessions_delete" ON ethogram_sessions
+  FOR DELETE USING (user_id = current_setting('request.jwt.claims', true)::json->>'sub');
+
+-- RECORDINGS: inherit ownership from the parent session
+CREATE POLICY "ethogram_recordings_select" ON ethogram_recordings
+  FOR SELECT USING (EXISTS (
+    SELECT 1 FROM ethogram_sessions s
+    WHERE s.id = session_id
+      AND (s.user_id = current_setting('request.jwt.claims', true)::json->>'sub' OR is_admin())
+  ));
+CREATE POLICY "ethogram_recordings_insert" ON ethogram_recordings
+  FOR INSERT WITH CHECK (EXISTS (
+    SELECT 1 FROM ethogram_sessions s
+    WHERE s.id = session_id
+      AND s.user_id = current_setting('request.jwt.claims', true)::json->>'sub'
+  ));

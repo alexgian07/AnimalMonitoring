@@ -24,13 +24,29 @@ function initState(): State {
 }
 const cloneData = (d: number[][][]) => d.map((o) => o.map((c) => c.slice()));
 
+// empty [obs][cell][beh] grid, and a normaliser that coerces a stored grid back to
+// the exact current dimensions (defends against template drift / malformed data).
+const emptyGrid = (): number[][][] => Array.from({ length: OBS }, () => CELLS.map(() => BEHAVIOURS.map(() => 0)));
+const normalizeGrid = (raw: unknown): number[][][] => {
+  const g = emptyGrid();
+  const r = raw as number[][][] | undefined;
+  for (let o = 0; o < OBS; o++)
+    for (let c = 0; c < CELLS.length; c++)
+      for (let b = 0; b < BEHAVIOURS.length; b++) {
+        const v = r?.[o]?.[c]?.[b];
+        if (typeof v === "number" && v > 0) g[o][c][b] = v;
+      }
+  return g;
+};
+
 type Action =
   | { type: "ops"; ops: Op[] }
   | { type: "bump"; beh: number; d: number }
   | { type: "setObs"; o: number }
   | { type: "setCell"; c: number }
   | { type: "next" }
-  | { type: "clearCell" };
+  | { type: "clearCell" }
+  | { type: "hydrate"; data: number[][][] };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -92,6 +108,9 @@ function reducer(state: State, action: Action): State {
       const history = state.history.filter((h) => !(h.obs === state.obs && h.cell === state.active));
       return { ...state, data, history };
     }
+    case "hydrate":
+      // Replace the whole grid (from a loaded session); reset position + history.
+      return { data: cloneData(action.data), obs: 0, active: 0, lastBehaviour: null, history: [] };
     default:
       return state;
   }
@@ -109,6 +128,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [recState, setRecState] = useState<"idle" | "recording" | "busy">("idle");
   const [showGrid, setShowGrid] = useState(false);
   const [note, setNote] = useState("");
+
+  // persistence: autosave / resume
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [sessionStatus, setSessionStatus] = useState<"draft" | "committed" | null>(null);
+  const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
+  const saveTimerRef = useRef<number | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -140,6 +165,64 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   }
   useEffect(() => () => stopTimer(), []);
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  // Load a saved session for this (date, time-of-day) so a refresh/crash can resume it,
+  // and reset the grid whenever the session identity changes.
+  useEffect(() => {
+    hydratingRef.current = true;              // block the autosave tick this render triggers
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}`);
+        const d = await res.json();
+        if (cancelled) return;
+        hydratingRef.current = true;          // block the autosave the hydrate dispatch triggers
+        if (d.session?.data?.length) {
+          dispatch({ type: "hydrate", data: normalizeGrid(d.session.data) });
+          setSessionStatus(d.session.status ?? "draft");
+          setHeard({
+            text: d.session.status === "committed"
+              ? "This session was already committed to Google Sheets — editing here won't change the Sheet."
+              : "Resumed your saved session.",
+          });
+        } else {
+          dispatch({ type: "hydrate", data: emptyGrid() });
+          setSessionStatus(null);
+        }
+        setSaveState("idle");
+      } catch {
+        if (!cancelled) hydratingRef.current = false;   // load failed → allow normal saving
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStr, ampm]);
+
+  // Debounced autosave of the working grid (~1.5s after the last change).
+  useEffect(() => {
+    if (hydratingRef.current) { hydratingRef.current = false; return; }   // skip loads
+    const total = state.data.reduce((s, o) => s + o.reduce((s2, c) => s2 + c.reduce((a, b) => a + b, 0), 0), 0);
+    if (total === 0) return;                  // nothing worth persisting yet
+    setSaveState("saving");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        const res = await fetch("/api/ethogram/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date: dateStr, ampm, data: state.data }),
+        });
+        if (!res.ok) throw new Error();
+        const d = await res.json();
+        setSaveState("saved");
+        if (d.status) setSessionStatus(d.status);
+      } catch {
+        setSaveState("error");
+      }
+    }, 1500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.data, dateStr, ampm]);
 
   const { data, obs, active } = state;
 
@@ -249,6 +332,25 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     a.download = `ethogram ${tabName()}.csv`;
     a.click();
   }
+  async function clearDay() {
+    if (!confirm(
+      `Clear the ENTIRE day "${tabName()}"?\n\n` +
+      `This wipes all 6 observations here and removes the saved session. ` +
+      `It does NOT delete anything already written to Google Sheets.`,
+    )) return;
+    hydratingRef.current = true;            // stop autosave from re-creating the row from the blank grid
+    dispatch({ type: "hydrate", data: emptyGrid() });
+    setSessionStatus(null);
+    setSaveState("idle");
+    try {
+      await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}`, { method: "DELETE" });
+      setNote("Cleared " + tabName() + " — the Google Sheet was not touched");
+    } catch {
+      setNote("⚠ could not clear the saved session");
+    }
+    setTimeout(() => setNote(""), 3500);
+  }
+
   async function commit() {
     if (!confirm(`Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/48 cells have data.`)) return;
     setNote("Committing " + tabName() + "…");
@@ -256,10 +358,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       const res = await fetch("/api/ethogram/commit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tabName: tabName(), rows: buildRows() }),
+        body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm }),
       });
       const d = await res.json();
-      if (res.ok) setNote("✓ Committed to tab " + d.committed.tab);
+      if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); }
       else if (d.code === "TAB_EXISTS") setNote("⚠ Tab " + tabName() + " already exists — rename or delete it first");
       else setNote("⚠ " + (d.error || "commit failed"));
     } catch (e) {
@@ -300,7 +402,20 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
             </button>
           ))}
         </div>
-        <span className="ml-auto font-bold text-emerald-400">{tabName()}</span>
+        <span className="ml-auto flex flex-col items-end leading-tight">
+          <span className="font-bold text-emerald-400">{tabName()}</span>
+          <span className="text-[10px] h-3 text-gray-400">
+            {sessionStatus === "committed"
+              ? "✓ committed"
+              : saveState === "saving"
+                ? "saving…"
+                : saveState === "saved"
+                  ? "saved ✓"
+                  : saveState === "error"
+                    ? "⚠ not saved"
+                    : ""}
+          </span>
+        </span>
       </div>
 
       {/* observation selector */}
@@ -410,6 +525,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <button onClick={downloadCsv} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">⬇ CSV</button>
         <button onClick={() => { if (confirm(`Clear counts in Obs ${obs + 1} · ${CELLS[active]}?`)) dispatch({ type: "clearCell" }); }} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">↺ Clear this cell</button>
       </div>
+
+      <button onClick={clearDay} className="w-full mt-2 py-2.5 rounded-xl bg-red-950/40 border border-red-900 text-red-300 hover:bg-red-900/40 text-sm">
+        🗑 Clear whole day (all 6 observations) — does not touch Google Sheets
+      </button>
 
       {commitEnabled && (
         <div className="flex mt-2">
