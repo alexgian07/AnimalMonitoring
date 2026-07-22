@@ -113,6 +113,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const discardRef = useRef(false);
 
   // recording timer (count-up; target is ~1 minute per cell)
   const [elapsed, setElapsed] = useState(0); // seconds
@@ -191,6 +192,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
     rec.onstop = async () => {
       stopTimer();
+      if (discardRef.current) {           // user cancelled — throw the take away, add nothing
+        discardRef.current = false;
+        setRecState("idle");
+        setHeard({ text: "Recording discarded — nothing added." });
+        return;
+      }
       setRecState("busy");
       setHeard({ text: "… transcribing" });
       const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
@@ -216,6 +223,11 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     startTimer();
     setRecState("recording");
     setHeard({ text: "listening… speak the tallies, tap Stop when done" });
+  }
+
+  function cancelRecording() {
+    discardRef.current = true;      // onstop will see this and discard the clip
+    mediaRef.current?.stop();       // stop without transcribing
   }
 
   /* ---- export / commit ---- */
@@ -338,6 +350,13 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           Next ▸
         </button>
       </div>
+
+      {/* cancel: discard the current take without transcribing */}
+      {recState === "recording" && (
+        <button onClick={cancelRecording} className="w-full py-2.5 mb-1 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm text-gray-300">
+          ✕ Cancel — discard this recording
+        </button>
+      )}
 
       {/* recording timer */}
       {recState === "recording" && (
