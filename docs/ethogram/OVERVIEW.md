@@ -193,12 +193,16 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
   and transcripts are persisted.
 - ~~Past-sessions browser~~ — **done**: `GET /api/ethogram/sessions` + a collapsible list in the UI
   (🗂 Past sessions) that reopens any prior day. Resuming by reselecting a date + AM/PM still works too.
-- **Security hardening (pre-existing, unrelated to ethogram):** the mutable-`search_path` advisor is
-  now fixed (migration `harden_helper_search_path` — the 4 SQL helpers pin `search_path=''` + qualify
-  `public.profiles`). Still open (low priority): the `SECURITY DEFINER` helpers remain callable via
-  PostgREST RPC by `anon`/`authenticated`. Can't blanket-`REVOKE EXECUTE` (they're used inside RLS
-  policies for authenticated users); `rls_auto_enable` (an event-trigger fn) is also flagged and left
-  untouched. Safe partial fix later: `REVOKE EXECUTE ... FROM PUBLIC` + `GRANT ... TO authenticated`.
+- **Security hardening (pre-existing, unrelated to ethogram):** mostly done.
+  - `search_path` pinned + refs schema-qualified on the 4 SQL helpers (migration `harden_helper_search_path`).
+  - Those 4 helpers are now revoked from `anon`/`PUBLIC` and granted only to `authenticated` +
+    `service_role` (migrations `harden_helper_execute_grants`, `harden_helper_revoke_anon_direct`) —
+    verified via `has_function_privilege` (anon=false, authenticated=true). This clears the `anon`
+    RPC-executable advisor. Note: Supabase grants these roles EXECUTE **directly**, so `REVOKE … FROM
+    PUBLIC` alone isn't enough — you must also `REVOKE … FROM anon`.
+  - Still open (by design / low priority): the `authenticated` RPC-executable warning remains — logged-in
+    users must keep EXECUTE because the RLS policies call these. And `rls_auto_enable` (an event-trigger
+    fn we didn't author) is still `anon`-executable and left untouched.
 - Optional: remember the last-used date/AM-PM (localStorage) so a refresh reopens the active session
   instead of defaulting to today.
 - The 2nd form type, when provided.

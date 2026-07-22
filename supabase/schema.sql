@@ -133,6 +133,12 @@ AS $$
   );
 $$;
 
+-- Lock these SECURITY DEFINER helpers to authenticated + service_role only — no anon / PUBLIC
+-- (migrations: harden_helper_execute_grants, harden_helper_revoke_anon_direct). They stay
+-- executable by `authenticated` because the RLS policies below call them.
+REVOKE EXECUTE ON FUNCTION get_my_profile(), is_admin(), is_researcher_or_admin(), can_access_location(UUID) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION get_my_profile(), is_admin(), is_researcher_or_admin(), can_access_location(UUID) TO authenticated, service_role;
+
 -- LOCATIONS policies
 CREATE POLICY "locations_select" ON locations
   FOR SELECT USING (can_access_location(id));
