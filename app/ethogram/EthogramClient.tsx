@@ -245,7 +245,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           type="date"
           value={dateStr}
           onChange={(e) => setDateStr(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm"
+          className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-base"
         />
         <div className="flex rounded-lg overflow-hidden border border-gray-700">
           {(["Π", "Μ"] as const).map((v) => (
