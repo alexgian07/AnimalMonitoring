@@ -87,20 +87,26 @@ ALTER TABLE measurements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE culls        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles     ENABLE ROW LEVEL SECURITY;
 
+-- NOTE: these SECURITY DEFINER helpers pin `search_path = ''` and fully schema-qualify
+-- their table refs (migration: harden_helper_search_path) to close the mutable-search_path
+-- privilege-escalation vector (Supabase advisor lint 0011).
+
 -- Helper: get calling user's profile
 CREATE OR REPLACE FUNCTION get_my_profile()
-RETURNS profiles
+RETURNS public.profiles
 LANGUAGE sql SECURITY DEFINER
+SET search_path = ''
 AS $$
-  SELECT * FROM profiles WHERE id = current_setting('request.jwt.claims', true)::json->>'sub';
+  SELECT * FROM public.profiles WHERE id = current_setting('request.jwt.claims', true)::json->>'sub';
 $$;
 
 -- Helper: check if current user is admin
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS boolean
 LANGUAGE sql SECURITY DEFINER
+SET search_path = ''
 AS $$
-  SELECT role = 'admin' FROM profiles
+  SELECT role = 'admin' FROM public.profiles
   WHERE id = current_setting('request.jwt.claims', true)::json->>'sub';
 $$;
 
@@ -108,8 +114,9 @@ $$;
 CREATE OR REPLACE FUNCTION is_researcher_or_admin()
 RETURNS boolean
 LANGUAGE sql SECURITY DEFINER
+SET search_path = ''
 AS $$
-  SELECT role IN ('admin', 'researcher') FROM profiles
+  SELECT role IN ('admin', 'researcher') FROM public.profiles
   WHERE id = current_setting('request.jwt.claims', true)::json->>'sub';
 $$;
 
@@ -117,9 +124,10 @@ $$;
 CREATE OR REPLACE FUNCTION can_access_location(loc_id UUID)
 RETURNS boolean
 LANGUAGE sql SECURITY DEFINER
+SET search_path = ''
 AS $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles
+    SELECT 1 FROM public.profiles
     WHERE id = current_setting('request.jwt.claims', true)::json->>'sub'
       AND (allowed_locations IS NULL OR loc_id = ANY(allowed_locations))
   );

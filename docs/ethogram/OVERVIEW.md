@@ -65,6 +65,7 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 | `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows, sessionDate, timeOfDay}` → `commitDay` (with committer A1 note) + marks the session `committed` in Supabase. |
 | `app/api/ethogram/session/route.ts` | Clerk-guarded. `POST` autosaves the working grid (upsert on the natural key); `GET ?date=&ampm=` resumes it **plus its transcripts**; `DELETE` clears a whole day (session + recordings; never touches the Sheet). |
 | `app/api/ethogram/recording/route.ts` | Clerk-guarded. `POST {date, ampm, obs, cell, transcript}` appends a transcript to `ethogram_recordings` (audit trail). |
+| `app/api/ethogram/sessions/route.ts` | Clerk-guarded. `GET` lists the caller's saved sessions (most recent first, + filled-cell count) for the past-sessions browser. |
 | `app/ethogram/page.tsx` | Server component; reads env to decide `commitEnabled`. |
 | `app/ethogram/EthogramClient.tsx` | The whole UI: reducer over `data[obs][cell][behaviour]`, MediaRecorder, timer, grid, export/commit. **Debounced autosave + resume + per-cell transcript display.** `"use client"`. |
 
@@ -189,12 +190,15 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
 
 - Broader end-to-end verification of every commit action + state handling.
 - ~~Supabase-backed session history / audit trail~~ — **done** (ADR 0006): drafts autosave/resume
-  and transcripts are persisted. Still possible: a **past-sessions browser** (list/reopen prior
-  days from `ethogram_sessions`) — currently you resume only by reselecting a date + AM/PM.
-- **Security hardening (pre-existing, unrelated to ethogram):** the original PoC helper functions
-  (`is_admin`, `get_my_profile`, `can_access_location`, `is_researcher_or_admin`, `rls_auto_enable`)
-  trip Supabase advisors — mutable `search_path` + anon/authenticated `EXECUTE` on `SECURITY DEFINER`
-  functions. Worth `SET search_path = ''` + `REVOKE EXECUTE ... FROM anon` before wider use.
+  and transcripts are persisted.
+- ~~Past-sessions browser~~ — **done**: `GET /api/ethogram/sessions` + a collapsible list in the UI
+  (🗂 Past sessions) that reopens any prior day. Resuming by reselecting a date + AM/PM still works too.
+- **Security hardening (pre-existing, unrelated to ethogram):** the mutable-`search_path` advisor is
+  now fixed (migration `harden_helper_search_path` — the 4 SQL helpers pin `search_path=''` + qualify
+  `public.profiles`). Still open (low priority): the `SECURITY DEFINER` helpers remain callable via
+  PostgREST RPC by `anon`/`authenticated`. Can't blanket-`REVOKE EXECUTE` (they're used inside RLS
+  policies for authenticated users); `rls_auto_enable` (an event-trigger fn) is also flagged and left
+  untouched. Safe partial fix later: `REVOKE EXECUTE ... FROM PUBLIC` + `GRANT ... TO authenticated`.
 - Optional: remember the last-used date/AM-PM (localStorage) so a refresh reopens the active session
   instead of defaulting to today.
 - The 2nd form type, when provided.

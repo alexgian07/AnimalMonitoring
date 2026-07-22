@@ -137,6 +137,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   // saved transcript per cell, keyed `${obs}-${cell}` (0-based); shown on resume
   const [transcripts, setTranscripts] = useState<Record<string, string>>({});
   const recCellRef = useRef<{ obs: number; cell: number }>({ obs: 0, cell: 0 });
+  // past-sessions browser
+  type PastSession = { date: string; ampm: string; status: string; sheetTab: string | null; updatedAt: string; filled: number };
+  const [showPast, setShowPast] = useState(false);
+  const [pastSessions, setPastSessions] = useState<PastSession[] | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -362,6 +366,17 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     a.download = `ethogram ${tabName()}.csv`;
     a.click();
   }
+  async function loadPast() {
+    setPastSessions(null);
+    try {
+      const res = await fetch("/api/ethogram/sessions");
+      const d = await res.json();
+      setPastSessions(d.sessions ?? []);
+    } catch {
+      setPastSessions([]);
+    }
+  }
+
   async function clearDay() {
     if (!confirm(
       `Clear the ENTIRE day "${tabName()}"?\n\n` +
@@ -571,6 +586,41 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       )}
 
       {note && <div className="mt-3 text-sm text-emerald-400">{note}</div>}
+
+      {/* past sessions browser */}
+      <button
+        onClick={() => { const next = !showPast; setShowPast(next); if (next) loadPast(); }}
+        className="w-full mt-3 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm"
+      >
+        🗂 {showPast ? "Hide past sessions" : "Past sessions"}
+      </button>
+      {showPast && (
+        <div className="mt-2 border border-gray-800 rounded-lg divide-y divide-gray-800 max-h-[50vh] overflow-auto">
+          {pastSessions === null ? (
+            <div className="px-3 py-3 text-sm text-gray-400">Loading…</div>
+          ) : pastSessions.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-gray-400">No saved sessions yet.</div>
+          ) : (
+            pastSessions.map((s) => {
+              const [, m, dd] = s.date.split("-").map(Number);
+              const isCurrent = s.date === dateStr && s.ampm === ampm;
+              return (
+                <button
+                  key={`${s.date}-${s.ampm}`}
+                  onClick={() => { setDateStr(s.date); setAmpm(s.ampm as "Π" | "Μ"); setShowPast(false); }}
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-800 ${isCurrent ? "bg-gray-800/60" : ""}`}
+                >
+                  <span className="font-bold text-emerald-400 min-w-[64px]">{dd}-{m} {s.ampm}</span>
+                  <span className="text-gray-300 flex-1">{s.filled}/48 cells</span>
+                  <span className={`text-xs ${s.status === "committed" ? "text-emerald-400" : "text-gray-500"}`}>
+                    {s.status === "committed" ? "✓ committed" : "draft"}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* full grid */}
       {showGrid && (
