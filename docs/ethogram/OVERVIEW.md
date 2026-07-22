@@ -205,4 +205,8 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
     fn we didn't author) is still `anon`-executable and left untouched.
 - Optional: remember the last-used date/AM-PM (localStorage) so a refresh reopens the active session
   instead of defaulting to today.
+- **E2E tests (deferred idea, not built):** a Playwright harness for headless auto-login testing —
+  auth via `@clerk/testing` testing tokens, and **mock `/api/ethogram/transcribe`** to inject
+  transcripts so the full pipeline (parse → grid → autosave → resume) can be tested without a mic.
+  Ad-hoc verification meanwhile uses Claude-in-Chrome (drives the user's visible, logged-in browser).
 - The 2nd form type, when provided.
