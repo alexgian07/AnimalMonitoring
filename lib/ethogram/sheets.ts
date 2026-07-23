@@ -124,6 +124,13 @@ export async function tabExists(spreadsheetId: string, tabName: string): Promise
   return (meta.data.sheets ?? []).some((s) => s.properties?.title === tabName);
 }
 
+/* Read a single cell's text (trimmed), e.g. range `'17-7'!B1`. Empty string if blank/missing. */
+export async function cellText(spreadsheetId: string, range: string): Promise<string> {
+  const sheets = sheetsClient();
+  const r = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  return String(r.data.values?.[0]?.[0] ?? "").trim();
+}
+
 /* Replace an EXISTING app-created tab's data with `rows` (the guarded correction path). Verifies
  * the tab looks like an ethogram tab (A1 == "OBSERV.") before clearing + rewriting, and throws
  * TabShapeError otherwise so we never clobber an unrelated sheet. If the tab has since vanished,

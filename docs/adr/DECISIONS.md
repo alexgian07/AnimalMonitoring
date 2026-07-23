@@ -132,6 +132,12 @@ different day means reselecting its date + AM/PM. Autosave skips a fully-empty g
 The commit's session-status update and the transcript save are **best-effort** (a failure never
 blocks the commit or the UI) since the Sheet remains authoritative.
 
+**Update (2026-07-23) — flush-on-switch:** the debounced autosave was being *cancelled* if the user
+switched date/AM-PM/space (or left the page) within the ~1.5s debounce window, silently dropping
+those edits (most visible toggling free-range morning↔lunch, and it made day-tab commits write stale
+data for the sibling half). Fixed: the latest unsaved payload is kept in a ref and **flushed
+immediately** on session-identity change / unmount, so edits are saved to the session being left.
+
 ---
 
 ## ADR 0007 — Re-commit policy: guarded in-app Replace for app-owned tabs; never touch foreign tabs
@@ -189,7 +195,14 @@ drives everything:
   **create-or-overwrite upsert** of the whole day tab (`upsertTab`) to `GSHEET_ID_FREERANGE`: the
   committing half's grid comes from the client, the **other half is read from its stored session**,
   and both blocks are written together — so committing morning then lunch fills one tab without
-  losing the earlier half (per the user's workflow; overwriting is expected here).
+  losing the earlier half (per the user's workflow; re-committing to update is expected here).
+- **Free-range commit guard (parity with inside's foreign-tab protection):** upsert is allowed, but
+  the day tab is only overwritten if the app **owns** it — i.e. a *committed* free-range session for
+  that day already has `sheet_tab = <tab>`. If a same-named tab exists that the app never committed
+  → refuse (`NOT_APP_OWNED`); if an owned tab's `B1` no longer reads `"OBSERV."` → refuse
+  (`TAB_SHAPE_MISMATCH`). First-ever commit (tab absent) just creates it. This keeps "commit as often
+  as you like" while never clobbering a manually-made/foreign tab. (Free-range does **not** adopt
+  inside's *refuse-on-exists* — that would break the intended re-commit-into-one-tab flow.)
 - **Tab name:** dashed `D-M` (e.g. `17-7`), no Π/Μ suffix (one tab per day). Shown before commit.
 
 **Consequences.** Inside code paths are untouched (everything gates on `space`/`isFree`). Free-range

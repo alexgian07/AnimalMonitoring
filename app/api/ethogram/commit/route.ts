@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { commitDay, replaceTab, upsertTab, type Row } from "@/lib/ethogram/sheets";
+import { commitDay, replaceTab, upsertTab, tabExists, cellText, type Row } from "@/lib/ethogram/sheets";
 import { BEHAVIOURS, OBS } from "@/lib/ethogram/parser";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -79,6 +79,35 @@ export async function POST(req: NextRequest) {
 
       const morning = timeOfDay === "Π" ? thisGrid : otherGrid;
       const lunch = timeOfDay === "Μ" ? thisGrid : otherGrid;
+
+      // Guard (parity with inside): free-range upserts the day tab, but must not clobber a tab it
+      // didn't create. "Ours" = a committed free-range session for this day already points at it.
+      const { data: owned } = await supabase
+        .from("ethogram_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("session_date", sessionDate)
+        .eq("space", "free_range")
+        .eq("status", "committed")
+        .eq("sheet_tab", tabName)
+        .limit(1)
+        .maybeSingle();
+      if (owned) {
+        // we created it before — shape-check before overwriting (defends against tampering/drift)
+        const b1 = await cellText(freeSheetId, `'${tabName}'!B1`);
+        if (b1.toUpperCase() !== "OBSERV.")
+          return NextResponse.json(
+            { error: `Tab "${tabName}" doesn't look like a free-range ethogram tab — refusing to overwrite it.`, code: "TAB_SHAPE_MISMATCH" },
+            { status: 409 },
+          );
+      } else if (await tabExists(freeSheetId, tabName)) {
+        // a same-named tab exists that we never committed → foreign/manual; don't touch it
+        return NextResponse.json(
+          { error: `Tab "${tabName}" already exists in the free-range Sheet and wasn't created by this app — rename or delete it there first.`, code: "NOT_APP_OWNED" },
+          { status: 409 },
+        );
+      }
+
       committed = await upsertTab(freeSheetId, tabName, freeRangeDayRows(morning, lunch), note);
     } else if (replace) {
       // Guarded correction path: only allow replacing a tab THIS APP committed. Verify against
