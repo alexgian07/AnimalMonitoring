@@ -461,9 +461,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function commit() {
     const msg = isFree
-      ? `Commit day "${tabName()}" to Google Sheets?\n\n` +
-        `Writes the whole day into one tab — both ΠΡΩΙ (morning) and ΜΕΣΗΜΕΡΙ (lunch), ` +
-        `using whatever is currently saved for each. Re-commit any time to update it.`
+      ? `Commit day "${tabName()}" to Google Sheets?\nSaves everything entered for this day so far — you can commit again any time to update it.`
       : `Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/${totalUnits} cells have data.`;
     if (!confirm(msg)) return;
     setCommitting(true);
@@ -724,7 +722,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
             // free-range: one upsert button (create-or-overwrite the day tab) — override is expected here
             <button onClick={commit} disabled={committing} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-emerald-950 font-bold flex items-center justify-center gap-2">
               {committing && <Spinner className="h-4 w-4" />}
-              {committing ? "Committing…" : `⬆ Commit day “${tabName()}” to Sheets (morning + lunch)`}
+              {committing ? "Committing…" : `⬆ Commit day “${tabName()}”`}
             </button>
           ) : sessionStatus === "committed" ? (
             <button onClick={replaceCommit} disabled={committing} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white font-bold flex items-center justify-center gap-2">
