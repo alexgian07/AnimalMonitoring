@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { interpretTranscript } from "@/lib/ethogram/interpret";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const form = new FormData();
   form.append("file", new Blob([buf], { type: ctype }), "audio." + ext);
   form.append("model", MODEL);
-  form.append("language", "en");
+  // no fixed language → Whisper auto-detects (supports Greek + English; ADR 0009)
   form.append("temperature", "0");
   form.append("prompt", VOCAB);
   form.append("response_format", "json");
@@ -36,5 +37,11 @@ export async function POST(req: NextRequest) {
     body: form,
   });
   const data = await r.json();
-  return NextResponse.json(data, { status: r.ok ? 200 : r.status });
+  if (!r.ok) return NextResponse.json(data, { status: r.status });
+
+  // LLM parse → per-behaviour counts for this clip; null on failure (client falls back to the
+  // deterministic parser on the raw text). Returns both so the client can show the transcript.
+  const text = typeof data.text === "string" ? data.text : "";
+  const counts = await interpretTranscript(text);
+  return NextResponse.json({ text, counts });
 }

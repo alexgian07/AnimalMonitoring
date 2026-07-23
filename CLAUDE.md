@@ -28,7 +28,7 @@ Groq Whisper transcribes → an on-screen grid → commit a 48-row tab to a Goog
   end-to-end flow, Google Sheets/service-account setup, env vars, limitations.
 - **Design decisions:** [`docs/adr/DECISIONS.md`](docs/adr/DECISIONS.md).
 - **Key files:** `app/ethogram/*`, `app/api/ethogram/*`, `lib/ethogram/*`.
-- **Extra env vars:** `GROQ_API_KEY`, `GSHEET_ID`, `GOOGLE_CREDENTIALS`, `GSHEET_ID_FREERANGE` (+ optional `GROQ_MODEL`).
+- **Extra env vars:** `GROQ_API_KEY`, `GSHEET_ID`, `GOOGLE_CREDENTIALS`, `GSHEET_ID_FREERANGE` (+ optional `GROQ_MODEL`, `GROQ_LLM_MODEL`).
 - **Gotcha:** commits are additive by default (new tab, refuse on collision). The one exception is a
   guarded **Replace** for a tab the app itself committed (ADR 0007 — verified via Supabase + an A1
   shape check; foreign tabs are never overwritten). Master Sheet must be a *native* Google Sheet, not

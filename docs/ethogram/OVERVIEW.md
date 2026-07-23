@@ -59,9 +59,11 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 
 | File | Role |
 |---|---|
-| `lib/ethogram/parser.ts` | Pure, framework-free parser. `parseToOps(text)` → list of ops (add / addLast / undo / setLast / cell / next). Also exports `BEHAVIOURS`, `CELLS`, `OBS`. Fully unit-testable. |
+| `lib/ethogram/parser.ts` | Pure, framework-free parser. `parseToOps(text)` → list of ops (add / addLast / undo / setLast / cell / next). Also exports `BEHAVIOURS`, `CELLS`, `OBS`. Now the **fallback** parser (ADR 0009). |
+| `lib/ethogram/interpret.ts` | **Primary** transcript→counts: `interpretTranscript(text)` calls a Groq chat model with strict JSON-schema output → per-behaviour counts. Handles phrasing variety + number-before/after + self-corrections + **Greek/English**. Returns null on failure → caller falls back to `parseToOps` (ADR 0009). |
 | `lib/ethogram/sheets.ts` | `commitDay(…, note?)` adds a new tab (**throws `TabExistsError` (409) rather than overwrite**; optional A1 `note`). `replaceTab(…)` overwrites an existing app-owned tab (guard: A1 must be `"OBSERV."`, else `TabShapeError`; falls back to create if the tab vanished). `tabExists(…)` checks a tab name. Creds from `GOOGLE_CREDENTIALS`. |
-| `app/api/ethogram/transcribe/route.ts` | Clerk-guarded. POST audio → Groq Whisper → `{text}`. `runtime = "nodejs"`. |
+| `app/api/ethogram/transcribe/route.ts` | Clerk-guarded. POST audio → Groq Whisper (auto-detect lang) → `interpretTranscript` → `{text, counts}`. `runtime = "nodejs"`. |
+| `app/api/ethogram/interpret/route.ts` | Clerk-guarded. POST `{text}` → `{counts}` via the LLM. Standalone for testing (no mic) + re-parsing stored transcripts. |
 | `app/api/ethogram/commit/route.ts` | Clerk-guarded. POST `{tabName, rows, sessionDate, timeOfDay, replace?}`. Default → `commitDay` (additive). `replace:true` → verifies the session is app-`committed` (Supabase) then `replaceTab`; refuses foreign tabs (`NOT_APP_OWNED`). Writes committer A1 note + marks session `committed`. |
 | `app/api/ethogram/session/route.ts` | Clerk-guarded. `POST` autosaves the working grid (upsert on the natural key); `GET ?date=&ampm=` resumes it **plus its transcripts**, and **reconciles** a stale `committed` badge (reverts to `draft` if its tab no longer exists in the Sheet); `DELETE` clears a whole day (session + recordings; never touches the Sheet). |
 | `app/api/ethogram/recording/route.ts` | Clerk-guarded. `POST {date, ampm, obs, cell, transcript}` appends a transcript to `ethogram_recordings` (audit trail). |
@@ -86,8 +88,10 @@ crash-recovery safety net + audit trail.
    A **count-up timer** shows elapsed time; at **1:00** it turns amber and the phone vibrates
    (Android) so she can keep her eyes on the pen. **Cancel** discards a take without transcribing.
 3. **Stop** → audio POSTed to `/api/ethogram/transcribe` → Groq Whisper → transcript.
-4. `parseToOps(transcript)` → ops → reducer updates the cell's counts. The transcript is shown so
-   she can verify; **＋/−** buttons fix anything by hand.
+4. The transcript → **LLM** (`interpretTranscript`, Groq, strict JSON) → per-behaviour counts set on
+   the cell (falls back to the deterministic `parseToOps` if the LLM fails). Handles English/Greek,
+   number order, and self-corrections (ADR 0009). The transcript is shown so she can verify;
+   **＋/−** buttons fix anything by hand.
 5. **Redo semantics**: for a filled cell the primary button becomes **Next ▸** and re-recording is a
    small secondary **↻ Redo** (with a confirm) that clears the cell first — a second pass **replaces**,
    never accumulates. (Slow fetches show a spinner; commit/replace show an in-button spinner.)
@@ -142,7 +146,8 @@ Set on **Vercel** (Production) and, for local dev, in `.env.local`:
 | `GSHEET_ID` | Id of the native master Google Sheet. |
 | `GOOGLE_CREDENTIALS` | Full contents of the service-account JSON (one string). |
 | `GSHEET_ID_FREERANGE` | Id of the free-range/outside master Sheet (second animal space; ADR 0008). |
-| `GROQ_MODEL` | Optional; defaults to `whisper-large-v3`. |
+| `GROQ_MODEL` | Optional; Whisper model, defaults to `whisper-large-v3`. |
+| `GROQ_LLM_MODEL` | Optional; chat model for transcript→counts, defaults to `openai/gpt-oss-20b` (ADR 0009). |
 
 (Plus the app's existing Clerk/Supabase vars.)
 

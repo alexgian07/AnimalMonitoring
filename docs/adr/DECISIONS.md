@@ -215,3 +215,40 @@ overwrite, so a foreign/manual tab is never clobbered from the app. The correcti
 in-app. The Sheet remains the system of record and the authority on whether a commit can proceed;
 Supabase only *gates the Replace offer*. `values.clear` covers `A1:Z100`, so a replaced tab can't keep
 stale cells beyond the 49×~25 grid.
+
+---
+
+## ADR 0009 — Transcript → counts via an LLM (Groq), with the deterministic parser as fallback
+
+**Status:** Accepted (implemented 2026-07-23). Supersedes the *primary* role of the deterministic
+parser from ADR 0003 (which stays as the fallback).
+
+**Context.** ADR 0003 put transcript→counts in a hand-written deterministic parser
+(`lib/ethogram/parser.ts`). It's free and instant, but brittle: it only understands number-**before**
+("four running"), one fixed set of synonyms, and no Greek. With **5 researchers** phrasing things many
+ways, plus a real bug (number-**after**: "running four" → wrong count) and a Greek requirement, the
+rule-based approach doesn't scale.
+
+**Decision.** Do the parsing with an **LLM** (`lib/ethogram/interpret.ts`), keeping the deterministic
+parser as a **fallback**:
+- **Provider:** a **Groq** chat model (`GROQ_LLM_MODEL`, default `openai/gpt-oss-20b`) — same API key
+  and free tier as Whisper, so ~free and no new provider. A small model is plenty for this extraction.
+- **Reliability:** Groq **Structured Outputs** (`response_format: json_schema`, `strict: true`) with
+  the 22 behaviour names as an `enum` + `temperature 0` → the model can only return valid, in-list
+  counts. It naturally handles number-before-or-after, phrasing variety, in-clip self-corrections
+  ("two, no three sitting" → 3), and **Greek/English/mixed**.
+- **Transcription:** Whisper no longer forces `language=en` → auto-detects Greek or English.
+- **Flow:** `/api/ethogram/transcribe` runs Whisper then `interpretTranscript`, returning
+  `{text, counts}` (one round-trip). The client **sets** the active cell to `counts` (a clip replaces
+  the cell). A standalone `/api/ethogram/interpret` (text → counts) exists for testing without a mic
+  and for future re-parsing of stored transcripts.
+- **Fallback:** if the LLM call fails/times out/returns null, the client parses the raw text with the
+  deterministic `parseToOps` — so we never regress below the old behaviour.
+
+**Consequences.** Phrasing bugs and per-researcher variation largely go away, and Greek works. The
+LLM is non-deterministic, mitigated by: strict schema + temp 0, the existing **human verification**
+(counts fill the grid; ＋/− fix), and the **raw transcript stored** in `ethogram_recordings`
+(auditable + re-parseable via the interpret route). Cost stays ~free (one short call per clip).
+Optional future accuracy boost: add a **Greek glossary** of the researchers' actual terms to the
+system prompt. If the default model id is ever deprecated, set `GROQ_LLM_MODEL` — until then the
+fallback keeps the app working.

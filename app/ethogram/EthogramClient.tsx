@@ -46,6 +46,7 @@ type Action =
   | { type: "setCell"; c: number }
   | { type: "next" }
   | { type: "clearCell" }
+  | { type: "setCounts"; counts: number[] }
   | { type: "hydrate"; data: number[][][] };
 
 function reducer(state: State, action: Action): State {
@@ -107,6 +108,14 @@ function reducer(state: State, action: Action): State {
       data[state.obs][state.active] = BEHAVIOURS.map(() => 0);
       const history = state.history.filter((h) => !(h.obs === state.obs && h.cell === state.active));
       return { ...state, data, history };
+    }
+    case "setCounts": {
+      // LLM result for the current clip → set the active cell's counts outright (a clip replaces
+      // the cell). Drop this cell's manual history since we've overwritten it.
+      const data = cloneData(state.data);
+      data[state.obs][state.active] = BEHAVIOURS.map((_, i) => Math.max(0, Math.round(action.counts[i] || 0)));
+      const history = state.history.filter((h) => !(h.obs === state.obs && h.cell === state.active));
+      return { ...state, data, history, lastBehaviour: null };
     }
     case "hydrate":
       // Replace the whole grid (from a loaded session); reset position + history.
@@ -377,7 +386,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         const d = await res.json();
         if (d.text != null) {
           const text = d.text.trim();
-          dispatch({ type: "ops", ops: parseToOps(d.text) });
+          // LLM counts if available; otherwise fall back to the deterministic parser on the text
+          if (Array.isArray(d.counts)) dispatch({ type: "setCounts", counts: d.counts });
+          else dispatch({ type: "ops", ops: parseToOps(d.text) });
           if (text) {
             const { obs: ro, cell: rc } = recCellRef.current;
             // transcript is shown via the (derived) status box; reset heard to the prompt
