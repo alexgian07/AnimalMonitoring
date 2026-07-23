@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import { commitDay, replaceTab, type Row } from "@/lib/ethogram/sheets";
+import { commitDay, replaceTab, upsertTab, type Row } from "@/lib/ethogram/sheets";
+import { BEHAVIOURS, OBS } from "@/lib/ethogram/parser";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+/* Free-range day tab layout: header, then a ΠΡΩΙ block (6 obs) and a ΜΕΣΗΜΕΡΙ block (6 obs),
+ * separated by a blank row. Each grid is [obs][cell=1][behaviour]; missing halves render blank. */
+function freeRangeDayRows(morning: number[][][] | null, lunch: number[][][] | null): Row[] {
+  const head: Row = ["", "OBSERV.", ...BEHAVIOURS.map((b) => b.name)];
+  const rows: Row[] = [head];
+  const block = (grid: number[][][] | null, label: string) => {
+    for (let o = 0; o < OBS; o++) {
+      const counts = grid?.[o]?.[0] ?? BEHAVIOURS.map(() => 0);
+      rows.push([o === 0 ? label : "", o + 1, ...counts.map((v) => (v || "") as string | number)]);
+    }
+  };
+  block(morning, "ΠΡΩΙ");
+  rows.push([]); // blank separator between the two half-day blocks
+  block(lunch, "ΜΕΣΗΜΕΡΙ");
+  return rows;
+}
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
@@ -37,7 +55,30 @@ export async function POST(req: NextRequest) {
     const note = `${replace ? "Re-committed" : "Committed"} by ${who || userId} · ${stamp}`;
 
     let committed;
-    if (replace) {
+    if (space === "free_range") {
+      // Free-range: assemble the whole day tab (both halves) and upsert it. The committing half's
+      // grid comes from the client (freshest); the other half is read from its stored session.
+      const freeSheetId = process.env.GSHEET_ID_FREERANGE;
+      if (!freeSheetId) throw new Error("GSHEET_ID_FREERANGE is not set on the server");
+      const thisGrid = body.data as number[][][] | undefined;
+      if (!thisGrid || !sessionDate || !timeOfDay) throw new Error("Missing data/sessionDate/timeOfDay");
+
+      const supabase = await createServerClient();
+      const otherAmpm = timeOfDay === "Π" ? "Μ" : "Π";
+      const { data: sib } = await supabase
+        .from("ethogram_sessions")
+        .select("data")
+        .eq("user_id", userId)
+        .eq("session_date", sessionDate)
+        .eq("time_of_day", otherAmpm)
+        .eq("space", "free_range")
+        .maybeSingle();
+      const otherGrid = (sib?.data as number[][][] | undefined) ?? null;
+
+      const morning = timeOfDay === "Π" ? thisGrid : otherGrid;
+      const lunch = timeOfDay === "Μ" ? thisGrid : otherGrid;
+      committed = await upsertTab(freeSheetId, tabName, freeRangeDayRows(morning, lunch), note);
+    } else if (replace) {
       // Guarded correction path: only allow replacing a tab THIS APP committed. Verify against
       // Supabase server-side (don't trust the client) so we never overwrite a foreign/manual tab.
       if (!sessionDate || !timeOfDay) throw new Error("Missing sessionDate/timeOfDay for replace");

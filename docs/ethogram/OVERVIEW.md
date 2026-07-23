@@ -67,7 +67,7 @@ All additive — nothing in the existing app was rewritten except one Sidebar na
 | `app/api/ethogram/recording/route.ts` | Clerk-guarded. `POST {date, ampm, obs, cell, transcript}` appends a transcript to `ethogram_recordings` (audit trail). |
 | `app/api/ethogram/sessions/route.ts` | Clerk-guarded. `GET` lists the caller's saved sessions (most recent first, + filled-cell count) for the past-sessions browser. |
 | `app/ethogram/page.tsx` | Server component; reads env to decide `commitEnabled`. |
-| `app/ethogram/EthogramClient.tsx` | The whole UI: reducer over `data[obs][cell][behaviour]`, MediaRecorder, timer, grid, export/commit. **Debounced autosave + resume + per-cell transcript display.** `"use client"`. |
+| `app/ethogram/EthogramClient.tsx` | The whole UI: reducer over `data[obs][cell][behaviour]`, MediaRecorder, timer, grid, export/commit. **Debounced autosave + resume + per-cell transcript display + Inside/Free-range space selector** (ADR 0008; cell count is data-driven — inside 8, free-range 1). `"use client"`. |
 
 **Persistence tables** (see `supabase/schema.sql`, ADR 0006): `ethogram_sessions` (JSONB grid,
 autosaved; natural key `user_id + session_date + time_of_day`) and `ethogram_recordings` (append-only
@@ -141,6 +141,7 @@ Set on **Vercel** (Production) and, for local dev, in `.env.local`:
 | `GROQ_API_KEY` | Groq Whisper transcription (free tier). |
 | `GSHEET_ID` | Id of the native master Google Sheet. |
 | `GOOGLE_CREDENTIALS` | Full contents of the service-account JSON (one string). |
+| `GSHEET_ID_FREERANGE` | Id of the free-range/outside master Sheet (second animal space; ADR 0008). |
 | `GROQ_MODEL` | Optional; defaults to `whisper-large-v3`. |
 
 (Plus the app's existing Clerk/Supabase vars.)

@@ -167,6 +167,36 @@ that happens to share the `D-M Π/Μ` name).
   commit"** badge (instead of "✓ committed") — signalling local edits not yet in the Sheet, which
   the ♻ Replace button pushes. Detected purely from the two timestamps; no extra columns.
 
+---
+
+## ADR 0008 — Second animal space "free range" (different sheet + layout), via a space selector
+
+**Status:** Accepted (implemented 2026-07-23).
+
+**Context.** Besides the "inside" pens (the original feature: 6 obs × 8 cells K1–K8, one tab per
+`day + Π/Μ`), the study also has a **free-range/outside** space with its **own** Google Sheet and a
+**different layout**: **no cells** — each tab is ONE day holding both a `ΠΡΩΙ` and a `ΜΕΣΗΜΕΡΙ` block
+of 6 observations (`(time) | OBSERV | 22 behaviours`, no Cell/Σ). Same 22 behaviours.
+
+**Decision.** One parameterized UI, not a fork. A **space selector** (Inside / Free range) at the top
+drives everything:
+- **DB:** an `ethogram_sessions.space` column ('inside'|'free_range') added to the natural key
+  `(user_id, session_date, time_of_day, space)`, so both spaces coexist per day (ADR: migration
+  `ethogram_add_space`). All persistence carries `space` (defaults 'inside').
+- **Grid:** cell count is data-driven — inside = 8, free-range = **1** pseudo-cell. Free-range hides
+  the cell selector and records **per observation**. Stored as `[obs][1][beh]`.
+- **Commit:** inside is unchanged (additive `commitDay` / guarded `replaceTab`). Free-range is a
+  **create-or-overwrite upsert** of the whole day tab (`upsertTab`) to `GSHEET_ID_FREERANGE`: the
+  committing half's grid comes from the client, the **other half is read from its stored session**,
+  and both blocks are written together — so committing morning then lunch fills one tab without
+  losing the earlier half (per the user's workflow; overwriting is expected here).
+- **Tab name:** dashed `D-M` (e.g. `17-7`), no Π/Μ suffix (one tab per day). Shown before commit.
+
+**Consequences.** Inside code paths are untouched (everything gates on `space`/`isFree`). Free-range
+lives in a **separate spreadsheet**, so it can never affect the inside research Sheet. The parser and
+autosave/resume/transcript/past-sessions infra are reused as-is. Free-range "full grid" table is
+hidden (it's cell-shaped); the per-observation list + Copy/CSV cover it.
+
 **Consequences.** Two independent checks (Supabase ownership + A1 shape) must both pass before any
 overwrite, so a foreign/manual tab is never clobbered from the app. The correction workflow is now
 in-app. The Sheet remains the system of record and the authority on whether a commit can proceed;

@@ -13,31 +13,26 @@ type State = {
   history: HistEntry[];
 };
 
-function initState(): State {
-  return {
-    data: Array.from({ length: OBS }, () => CELLS.map(() => BEHAVIOURS.map(() => 0))),
-    obs: 0,
-    active: 0,
-    lastBehaviour: null,
-    history: [],
-  };
-}
-const cloneData = (d: number[][][]) => d.map((o) => o.map((c) => c.slice()));
-
-// empty [obs][cell][beh] grid, and a normaliser that coerces a stored grid back to
-// the exact current dimensions (defends against template drift / malformed data).
-const emptyGrid = (): number[][][] => Array.from({ length: OBS }, () => CELLS.map(() => BEHAVIOURS.map(() => 0)));
-const normalizeGrid = (raw: unknown): number[][][] => {
-  const g = emptyGrid();
+// empty [obs][cell][beh] grid for a given cell count (inside = 8 cells, free-range = 1),
+// and a normaliser that coerces a stored grid back to the expected dimensions.
+const emptyGrid = (cellCount: number): number[][][] =>
+  Array.from({ length: OBS }, () => Array.from({ length: cellCount }, () => BEHAVIOURS.map(() => 0)));
+const normalizeGrid = (raw: unknown, cellCount: number): number[][][] => {
+  const g = emptyGrid(cellCount);
   const r = raw as number[][][] | undefined;
   for (let o = 0; o < OBS; o++)
-    for (let c = 0; c < CELLS.length; c++)
+    for (let c = 0; c < cellCount; c++)
       for (let b = 0; b < BEHAVIOURS.length; b++) {
         const v = r?.[o]?.[c]?.[b];
         if (typeof v === "number" && v > 0) g[o][c][b] = v;
       }
   return g;
 };
+
+function initState(): State {
+  return { data: emptyGrid(CELLS.length), obs: 0, active: 0, lastBehaviour: null, history: [] };
+}
+const cloneData = (d: number[][][]) => d.map((o) => o.map((c) => c.slice()));
 
 // small inline spinner; inherits text color via border-current
 const Spinner = ({ className = "" }: { className?: string }) => (
@@ -81,9 +76,9 @@ function reducer(state: State, action: Action): State {
         else if (op.t === "addLast") add(lastBehaviour, op.n);
         else if (op.t === "undo") undo();
         else if (op.t === "setLast") setLast(op.n);
-        else if (op.t === "cell") active = Math.max(0, Math.min(CELLS.length - 1, op.cell));
+        else if (op.t === "cell") active = Math.max(0, Math.min(data[0].length - 1, op.cell));
         else if (op.t === "next") {
-          if (active < CELLS.length - 1) active++;
+          if (active < data[0].length - 1) active++;
           else if (obs < OBS - 1) { obs++; active = 0; }
         }
       }
@@ -100,10 +95,10 @@ function reducer(state: State, action: Action): State {
     case "setObs":
       return { ...state, obs: Math.max(0, Math.min(OBS - 1, action.o)) };
     case "setCell":
-      return { ...state, active: Math.max(0, Math.min(CELLS.length - 1, action.c)) };
+      return { ...state, active: Math.max(0, Math.min(state.data[0].length - 1, action.c)) };
     case "next": {
       let { obs, active } = state;
-      if (active < CELLS.length - 1) active++;
+      if (active < state.data[0].length - 1) active++;
       else if (obs < OBS - 1) { obs++; active = 0; }
       return { ...state, obs, active };
     }
@@ -129,6 +124,10 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const [ampm, setAmpm] = useState<"Π" | "Μ">("Π");
+  // which animal space: "inside" (K1–K8 cells) or "free_range" (no cells, per-observation)
+  const [space, setSpace] = useState<"inside" | "free_range">("inside");
+  const cellCount = space === "free_range" ? 1 : CELLS.length;
+  const isFree = space === "free_range";
   const [heard, setHeard] = useState<{ text: string; err?: boolean }>({ text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
   const [recState, setRecState] = useState<"idle" | "recording" | "busy">("idle");
   const [showGrid, setShowGrid] = useState(false);
@@ -190,12 +189,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}`);
+        const res = await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`);
         const d = await res.json();
         if (cancelled) return;
         hydratingRef.current = true;          // block the autosave the hydrate dispatch triggers
         if (d.session?.data?.length) {
-          dispatch({ type: "hydrate", data: normalizeGrid(d.session.data) });
+          dispatch({ type: "hydrate", data: normalizeGrid(d.session.data, cellCount) });
           setSessionStatus(d.session.status ?? "draft");
           setHeard({
             text: d.session.status === "committed"
@@ -203,7 +202,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               : "Resumed your saved session.",
           });
         } else {
-          dispatch({ type: "hydrate", data: emptyGrid() });
+          dispatch({ type: "hydrate", data: emptyGrid(cellCount) });
           setSessionStatus(null);
         }
         // committed session with edits after the commit → "edited since commit".
@@ -227,7 +226,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateStr, ampm]);
+  }, [dateStr, ampm, space]);
 
   // Debounced autosave of the working grid (~1.5s after the last change).
   useEffect(() => {
@@ -242,7 +241,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         const res = await fetch("/api/ethogram/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ date: dateStr, ampm, data: state.data }),
+          body: JSON.stringify({ date: dateStr, ampm, space, template: isFree ? "free-range" : "22-july", data: state.data }),
         });
         if (!res.ok) throw new Error();
         const d = await res.json();
@@ -254,21 +253,24 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     }, 1500);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.data, dateStr, ampm]);
+  }, [state.data, dateStr, ampm, space]);
 
   const { data, obs, active } = state;
 
-  const tabName = () => {
+  // Inside → "D-M Π/Μ" (one tab per half). Free-range → "D-M" (one tab per day, holds both halves).
+  const dayName = () => {
     if (!dateStr) return "—";
     const [, m, d] = dateStr.split("-").map(Number);
-    return `${d}-${m} ${ampm}`;
+    return `${d}-${m}`;
   };
+  const tabName = () => (dateStr ? (isFree ? dayName() : `${dayName()} ${ampm}`) : "—");
   const cellHasData = (o: number, c: number) => data[o][c].some((v) => v > 0);
   const doneCount = () => {
     let n = 0;
-    for (let o = 0; o < OBS; o++) for (let c = 0; c < CELLS.length; c++) if (cellHasData(o, c)) n++;
+    for (let o = 0; o < OBS; o++) for (let c = 0; c < cellCount; c++) if (cellHasData(o, c)) n++;
     return n;
   };
+  const totalUnits = OBS * cellCount;   // 48 (inside) or 6 (free-range)
   const cellTotal = data[obs][active].reduce((a, b) => a + b, 0);
   // The status box shows the CURRENT cell's saved transcript when idle; otherwise the live
   // status/instruction/error text. Derived (not stored) so it's always right for this cell.
@@ -281,6 +283,15 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const dateInFuture = !!dateStr && dateStr > todayStr;
 
   const buildRows = (): (string | number)[][] => {
+    if (isFree) {
+      // free-range: one block for the current half — (time) | OBSERV | 22 behaviours (no Cell/Σ)
+      const head = ["", "OBSERV.", ...BEHAVIOURS.map((b) => b.name)];
+      const rows: (string | number)[][] = [head];
+      const label = ampm === "Π" ? "ΠΡΩΙ" : "ΜΕΣΗΜΕΡΙ";
+      for (let o = 0; o < OBS; o++)
+        rows.push([o === 0 ? label : "", o + 1, ...data[o][0].map((v) => (v || "") as string | number)]);
+      return rows;
+    }
     const head = ["OBSERV.", "Cell", ...BEHAVIOURS.map((b) => b.name)];
     const rows: (string | number)[][] = [head];
     for (let o = 0; o < OBS; o++)
@@ -298,7 +309,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     if (recState === "recording") { mediaRef.current?.stop(); return; }
     // Redo: if this cell already has counts, a fresh recording replaces them (no accumulating).
     if (data[obs][active].some((v) => v > 0)) {
-      if (!confirm(`Re-record Obs ${obs + 1} · ${CELLS[active]}?\nIts current counts will be cleared and replaced.`)) return;
+      if (!confirm(`Re-record Obs ${obs + 1}${isFree ? "" : ` · ${CELLS[active]}`}?\nIts current counts will be cleared and replaced.`)) return;
       dispatch({ type: "clearCell" });
       setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; });
     }
@@ -351,7 +362,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
             fetch("/api/ethogram/recording", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ date: dateStr, ampm, obs: ro + 1, cell: rc + 1, transcript: text }),
+              body: JSON.stringify({ date: dateStr, ampm, space, obs: ro + 1, cell: rc + 1, transcript: text }),
             }).catch(() => {});
           } else {
             setHeard({ text: "(nothing heard)" });
@@ -379,7 +390,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   async function copyGrid() {
     try {
       await navigator.clipboard.writeText(buildRows().map((r) => r.join("\t")).join("\n"));
-      setNote(`48 rows copied — paste into the ${tabName()} tab`);
+      setNote(`Copied — paste into the ${tabName()} tab`);
     } catch {
       setNote("Copy failed — use CSV");
     }
@@ -395,7 +406,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   async function loadPast() {
     setPastSessions(null);
     try {
-      const res = await fetch("/api/ethogram/sessions");
+      const res = await fetch(`/api/ethogram/sessions?space=${space}`);
       const d = await res.json();
       setPastSessions(d.sessions ?? []);
     } catch {
@@ -405,17 +416,17 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function clearDay() {
     if (!confirm(
-      `Clear the ENTIRE day "${tabName()}"?\n\n` +
-      `This wipes all 6 observations here and removes the saved session. ` +
+      `Clear "${tabName()}"?\n\n` +
+      `This wipes all ${OBS} observations for this ${isFree ? "half-day" : "cell set"} and removes the saved session. ` +
       `It does NOT delete anything already written to Google Sheets.`,
     )) return;
     hydratingRef.current = true;            // stop autosave from re-creating the row from the blank grid
-    dispatch({ type: "hydrate", data: emptyGrid() });
+    dispatch({ type: "hydrate", data: emptyGrid(cellCount) });
     setSessionStatus(null);
     setSaveState("idle");
     setTranscripts({});
     try {
-      await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}`, { method: "DELETE" });
+      await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`, { method: "DELETE" });
       setNote("Cleared " + tabName() + " — the Google Sheet was not touched");
     } catch {
       setNote("⚠ could not clear the saved session");
@@ -424,19 +435,27 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   }
 
   async function commit() {
-    if (!confirm(`Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/48 cells have data.`)) return;
+    const msg = isFree
+      ? `Commit ${ampm === "Π" ? "morning" : "lunch"} into day tab "${tabName()}"?\n` +
+        `${doneCount()}/${OBS} observations have data.\nThe other half-day already in that tab is preserved.`
+      : `Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/${totalUnits} cells have data.`;
+    if (!confirm(msg)) return;
     setCommitting(true);
     setNote("Committing " + tabName() + "…");
     try {
       const res = await fetch("/api/ethogram/commit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm }),
+        body: JSON.stringify({
+          tabName: tabName(), sessionDate: dateStr, timeOfDay: ampm, space,
+          // inside → prebuilt 48 rows; free-range → raw grid (server assembles the day + sibling half)
+          ...(isFree ? { data: state.data } : { rows: buildRows() }),
+        }),
       });
       const d = await res.json();
       if (res.ok) { setNote("✓ Committed to tab " + d.committed.tab); setSessionStatus("committed"); setDirtySinceCommit(false); }
-      // A collision on a NOT-yet-committed day means a foreign/manual tab — never auto-overwrite.
-      else if (d.code === "TAB_EXISTS")
+      // A collision on a NOT-yet-committed INSIDE day means a foreign/manual tab — never auto-overwrite.
+      else if (!isFree && d.code === "TAB_EXISTS")
         setNote(`⚠ Tab ${tabName()} already exists (not created here) — rename or delete it in Google Sheets first.`);
       else setNote("⚠ " + (d.error || "commit failed"));
     } catch (e) {
@@ -487,6 +506,15 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
       {/* session bar */}
       <div className="flex flex-wrap items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl p-3 mb-4">
+        <select
+          value={space}
+          onChange={(e) => setSpace(e.target.value as "inside" | "free_range")}
+          className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm font-semibold"
+          title="Which animal space"
+        >
+          <option value="inside">🏠 Inside</option>
+          <option value="free_range">🌿 Free range</option>
+        </select>
         <input
           type="date"
           value={dateStr}
@@ -544,23 +572,28 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         ))}
       </div>
 
-      {/* cell selector */}
-      <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5 mt-3">Cell</div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {CELLS.map((c, i) => (
-          <button key={c} onClick={() => dispatch({ type: "setCell", c: i })} className={chip(i === active, cellHasData(obs, i))}>
-            {c}
-          </button>
-        ))}
-      </div>
+      {/* cell selector (inside only — free-range has no cells) */}
+      {!isFree && (
+        <>
+          <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5 mt-3">Cell</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {CELLS.map((c, i) => (
+              <button key={c} onClick={() => dispatch({ type: "setCell", c: i })} className={chip(i === active, cellHasData(obs, i))}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* progress */}
       <div className="flex justify-between items-center text-sm mt-3 mb-1">
         <span>
-          Obs <b className="text-emerald-400">{obs + 1}</b>/6 · Cell <b className="text-emerald-400">{CELLS[active]}</b>
+          Obs <b className="text-emerald-400">{obs + 1}</b>/{OBS}
+          {!isFree && <> · Cell <b className="text-emerald-400">{CELLS[active]}</b></>}
         </span>
         <span>
-          <b className="text-emerald-400">{doneCount()}</b> / 48 cells done
+          <b className="text-emerald-400">{doneCount()}</b> / {totalUnits} {isFree ? "observations" : "cells"} done
         </span>
       </div>
 
@@ -593,7 +626,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
                 ? "⏹ Stop & transcribe"
                 : recState === "busy"
                   ? "… transcribing"
-                  : `🎤 Record — Obs ${obs + 1} · ${CELLS[active]}`}
+                  : `🎤 Record — Obs ${obs + 1}${isFree ? "" : ` · ${CELLS[active]}`}`}
             </button>
             <button onClick={() => dispatch({ type: "next" })} className="flex-none w-[88px] rounded-2xl bg-gray-800 hover:bg-gray-700 font-bold">
               Next ▸
@@ -625,7 +658,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
       {/* active cell list */}
       <div className="flex justify-between items-baseline mb-1.5">
-        <span className="font-bold">Obs {obs + 1} · {CELLS[active]}</span>
+        <span className="font-bold">Obs {obs + 1}{!isFree && <> · {CELLS[active]}</>}</span>
         <span className="text-xs text-gray-400">{cellTotal ? cellTotal + " scored" : ""}</span>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -647,19 +680,27 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
       {/* actions */}
       <div className="flex flex-wrap gap-2 mt-4">
-        <button onClick={() => setShowGrid((s) => !s)} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">▦ Full grid (48)</button>
+        {!isFree && (
+          <button onClick={() => setShowGrid((s) => !s)} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">▦ Full grid (48)</button>
+        )}
         <button onClick={copyGrid} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">📋 Copy for Excel</button>
         <button onClick={downloadCsv} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">⬇ CSV</button>
-        <button onClick={() => { if (confirm(`Clear counts in Obs ${obs + 1} · ${CELLS[active]}?`)) { dispatch({ type: "clearCell" }); setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; }); } }} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">↺ Clear this cell</button>
+        <button onClick={() => { if (confirm(`Clear counts in Obs ${obs + 1}${isFree ? "" : ` · ${CELLS[active]}`}?`)) { dispatch({ type: "clearCell" }); setTranscripts((m) => { const n = { ...m }; delete n[`${obs}-${active}`]; return n; }); } }} className="flex-1 min-w-[110px] py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-sm">↺ Clear this {isFree ? "observation" : "cell"}</button>
       </div>
 
       <button onClick={clearDay} className="w-full mt-2 py-2.5 rounded-xl bg-red-950/40 border border-red-900 text-red-300 hover:bg-red-900/40 text-sm">
-        🗑 Clear whole day (all 6 observations) — does not touch Google Sheets
+        🗑 Clear {isFree ? "this half-day" : "whole day"} (all {OBS} observations) — does not touch Google Sheets
       </button>
 
       {commitEnabled && (
         <div className="flex mt-2">
-          {sessionStatus === "committed" ? (
+          {isFree ? (
+            // free-range: one upsert button (create-or-overwrite the day tab) — override is expected here
+            <button onClick={commit} disabled={committing} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-emerald-950 font-bold flex items-center justify-center gap-2">
+              {committing && <Spinner className="h-4 w-4" />}
+              {committing ? "Committing…" : `⬆ Commit ${ampm === "Π" ? "morning" : "lunch"} → day tab “${tabName()}”`}
+            </button>
+          ) : sessionStatus === "committed" ? (
             <button onClick={replaceCommit} disabled={committing} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white font-bold flex items-center justify-center gap-2">
               {committing && <Spinner className="h-4 w-4" />}
               {committing ? "Replacing…" : `♻ Replace committed “${tabName()}” tab (overwrites it)`}
@@ -699,7 +740,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
                   className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-800 ${isCurrent ? "bg-gray-800/60" : ""}`}
                 >
                   <span className="font-bold text-emerald-400 min-w-[64px]">{dd}-{m} {s.ampm}</span>
-                  <span className="text-gray-300 flex-1">{s.filled}/48 cells</span>
+                  <span className="text-gray-300 flex-1">{s.filled}/{isFree ? OBS : 48} {isFree ? "obs" : "cells"}</span>
                   <span className={`text-xs ${s.status === "committed" ? "text-emerald-400" : "text-gray-500"}`}>
                     {s.status === "committed" ? "✓ committed" : "draft"}
                   </span>
@@ -710,8 +751,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         </div>
       )}
 
-      {/* full grid */}
-      {showGrid && (
+      {/* full grid (inside only) */}
+      {showGrid && !isFree && (
         <div className="mt-4 overflow-auto border border-gray-800 rounded-lg max-h-[70vh]">
           <table className="border-collapse text-xs">
             <thead>

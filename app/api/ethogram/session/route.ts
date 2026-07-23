@@ -33,12 +33,13 @@ export async function GET(req: NextRequest) {
     // Reconcile the committed badge with reality: if a session we marked committed no longer has
     // its tab in the Sheet (deleted/renamed there), quietly revert it to draft. Best-effort, and
     // only for committed sessions so drafts don't pay a Sheets round-trip.
+    const spaceSheetId = space === "free_range" ? process.env.GSHEET_ID_FREERANGE : process.env.GSHEET_ID;
     if (
       session?.status === "committed" && session.sheet_tab &&
-      process.env.GSHEET_ID && process.env.GOOGLE_CREDENTIALS
+      spaceSheetId && process.env.GOOGLE_CREDENTIALS
     ) {
       try {
-        if (!(await tabExists(process.env.GSHEET_ID, session.sheet_tab))) {
+        if (!(await tabExists(spaceSheetId, session.sheet_tab))) {
           await supabase
             .from("ethogram_sessions")
             .update({ status: "draft", sheet_tab: null, committed_at: null, committed_by: null, updated_at: new Date().toISOString() })

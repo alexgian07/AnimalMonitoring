@@ -73,6 +73,50 @@ export async function commitDay(spreadsheetId: string, tabName: string, rows: Ro
   return { tab: tabName, rowsWritten: rows.length };
 }
 
+/* Create-or-replace a tab with `rows` (used by free-range, where re-committing a day is an
+ * expected upsert). If the tab exists, clear its range and rewrite; otherwise create it. Optional
+ * A1 `note`. No shape guard — free-range tabs are app-owned and overwriting is intended. */
+export async function upsertTab(spreadsheetId: string, tabName: string, rows: Row[], note?: string) {
+  const sheets = sheetsClient();
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets.properties(sheetId,title)" });
+  const existing = (meta.data.sheets ?? []).find((s) => s.properties?.title === tabName);
+  let sheetId: number | null | undefined = existing?.properties?.sheetId;
+
+  if (sheetId == null) {
+    const added = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: tabName } } }] },
+    });
+    sheetId = added.data.replies?.[0]?.addSheet?.properties?.sheetId ?? undefined;
+  } else {
+    await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tabName}'!A1:Z100` });
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${tabName}'!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: rows },
+  });
+
+  if (note && sheetId != null) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          updateCells: {
+            range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+            rows: [{ values: [{ note }] }],
+            fields: "note",
+          },
+        }],
+      },
+    });
+  }
+
+  return { tab: tabName, rowsWritten: rows.length, upserted: true };
+}
+
 /* Whether a tab with this name currently exists in the spreadsheet. */
 export async function tabExists(spreadsheetId: string, tabName: string): Promise<boolean> {
   const sheets = sheetsClient();
