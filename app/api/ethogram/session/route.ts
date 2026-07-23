@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const date = url.searchParams.get("date");
   const ampm = url.searchParams.get("ampm");
+  const space = url.searchParams.get("space") || "inside";
   if (!date || !ampm) return NextResponse.json({ error: "Missing date/ampm" }, { status: 400 });
 
   try {
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
       .eq("user_id", userId)
       .eq("session_date", date)
       .eq("time_of_day", ampm)
+      .eq("space", space)
       .maybeSingle();
     if (sessionRes.error) throw sessionRes.error;
     let session = sessionRes.data;
@@ -42,7 +44,8 @@ export async function GET(req: NextRequest) {
             .update({ status: "draft", sheet_tab: null, committed_at: null, committed_by: null, updated_at: new Date().toISOString() })
             .eq("user_id", userId)
             .eq("session_date", date)
-            .eq("time_of_day", ampm);
+            .eq("time_of_day", ampm)
+            .eq("space", space);
           session = { ...session, status: "draft", sheet_tab: null, committed_at: null };
         }
       } catch {
@@ -76,8 +79,8 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { date, ampm, data, template } = (await req.json()) as {
-      date?: string; ampm?: string; data?: unknown; template?: string;
+    const { date, ampm, data, template, space = "inside" } = (await req.json()) as {
+      date?: string; ampm?: string; data?: unknown; template?: string; space?: string;
     };
     if (!date || !ampm || !Array.isArray(data))
       return NextResponse.json({ error: "Missing date/ampm/data" }, { status: 400 });
@@ -90,11 +93,12 @@ export async function POST(req: NextRequest) {
           user_id: userId,
           session_date: date,
           time_of_day: ampm,
+          space,
           data,
           ...(template ? { template } : {}),
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,session_date,time_of_day" },
+        { onConflict: "user_id,session_date,time_of_day,space" },
       )
       .select("id, status")
       .single();
@@ -115,6 +119,7 @@ export async function DELETE(req: NextRequest) {
   const url = new URL(req.url);
   const date = url.searchParams.get("date");
   const ampm = url.searchParams.get("ampm");
+  const space = url.searchParams.get("space") || "inside";
   if (!date || !ampm) return NextResponse.json({ error: "Missing date/ampm" }, { status: 400 });
 
   try {
@@ -124,7 +129,8 @@ export async function DELETE(req: NextRequest) {
       .delete()
       .eq("user_id", userId)
       .eq("session_date", date)
-      .eq("time_of_day", ampm);
+      .eq("time_of_day", ampm)
+      .eq("space", space);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {

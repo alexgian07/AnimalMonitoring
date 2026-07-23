@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -6,16 +6,21 @@ export const runtime = "nodejs";
 
 /* List the caller's saved sessions (most recent first) for the past-sessions browser.
  * Returns lightweight metadata + a filled-cell count computed from the JSONB grid. */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const supabase = await createServerClient();
-    const { data, error } = await supabase
+    const url = new URL(req.url);
+    const spaceFilter = url.searchParams.get("space"); // optional: only this space
+
+    let query = supabase
       .from("ethogram_sessions")
-      .select("session_date, time_of_day, status, sheet_tab, updated_at, data")
-      .eq("user_id", userId)
+      .select("session_date, time_of_day, status, sheet_tab, updated_at, data, space")
+      .eq("user_id", userId);
+    if (spaceFilter) query = query.eq("space", spaceFilter);
+    const { data, error } = await query
       .order("session_date", { ascending: false })
       .order("time_of_day", { ascending: true })
       .limit(60);
@@ -35,6 +40,7 @@ export async function GET() {
         status: s.status,
         sheetTab: s.sheet_tab,
         updatedAt: s.updated_at,
+        space: s.space,
         filled,
       };
     });

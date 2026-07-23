@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { date, ampm, obs, cell, transcript } = (await req.json()) as {
-      date?: string; ampm?: string; obs?: number; cell?: number; transcript?: string;
+    const { date, ampm, obs, cell, transcript, space = "inside" } = (await req.json()) as {
+      date?: string; ampm?: string; obs?: number; cell?: number; transcript?: string; space?: string;
     };
     if (!date || !ampm || !obs || !cell || typeof transcript !== "string" || !transcript.trim())
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     const { data: session, error: sErr } = await supabase
       .from("ethogram_sessions")
       .upsert(
-        { user_id: userId, session_date: date, time_of_day: ampm, updated_at: new Date().toISOString() },
-        { onConflict: "user_id,session_date,time_of_day" },
+        { user_id: userId, session_date: date, time_of_day: ampm, space, updated_at: new Date().toISOString() },
+        { onConflict: "user_id,session_date,time_of_day,space" },
       )
       .select("id")
       .single();

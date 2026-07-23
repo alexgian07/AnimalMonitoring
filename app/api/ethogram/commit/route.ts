@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const rows: Row[] = body.rows;
     const sessionDate: string | undefined = body.sessionDate;
     const timeOfDay: string | undefined = body.timeOfDay;
+    const space: string = body.space || "inside";
     const replace: boolean = body.replace === true;
     if (!tabName || !Array.isArray(rows)) throw new Error("Missing tabName/rows");
 
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
         .eq("user_id", userId)
         .eq("session_date", sessionDate)
         .eq("time_of_day", timeOfDay)
+        .eq("space", space)
         .maybeSingle();
       if (!sess || sess.status !== "committed" || sess.sheet_tab !== tabName) {
         return NextResponse.json(
@@ -74,13 +76,14 @@ export async function POST(req: NextRequest) {
             user_id: userId,
             session_date: sessionDate,
             time_of_day: timeOfDay,
+            space,
             status: "committed",
             sheet_tab: tabName,
             committed_by: userId,
             committed_at: nowIso,
             updated_at: nowIso,
           },
-          { onConflict: "user_id,session_date,time_of_day" },
+          { onConflict: "user_id,session_date,time_of_day,space" },
         );
       } catch {
         /* audit update is best-effort — the Sheet is the system of record */

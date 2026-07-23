@@ -222,6 +222,7 @@ CREATE TABLE ethogram_sessions (
   user_id      TEXT NOT NULL,                                    -- Clerk user id (owner/creator)
   session_date DATE NOT NULL,
   time_of_day  TEXT NOT NULL CHECK (time_of_day IN ('Π','Μ')),   -- Πρωί / Μεσημέρι
+  space        TEXT NOT NULL DEFAULT 'inside' CHECK (space IN ('inside','free_range')),  -- animal space
   template     TEXT NOT NULL DEFAULT '22-july',
   data         JSONB NOT NULL DEFAULT '[]'::jsonb,               -- [obs][cell][behaviour] grid, autosaved
   status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','committed')),
@@ -230,7 +231,8 @@ CREATE TABLE ethogram_sessions (
   committed_at TIMESTAMPTZ,
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (user_id, session_date, time_of_day)                    -- one session per (day, AM/PM) per user
+  -- one session per (day, AM/PM, space) per user — inside & free-range can share a date
+  CONSTRAINT ethogram_sessions_natural_key UNIQUE (user_id, session_date, time_of_day, space)
 );
 
 CREATE TABLE ethogram_recordings (
