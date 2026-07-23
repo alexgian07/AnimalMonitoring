@@ -298,14 +298,15 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     return `${d}-${m}`;
   };
   const tabName = () => (dateStr ? (isFree ? dayName() : `${dayName()} ${ampm}`) : "—");
-  const cellHasData = (o: number, c: number) => data[o][c].some((v) => v > 0);
+  // null-safe: during a space switch the grid dims briefly mismatch the layout (data reloads async)
+  const cellHasData = (o: number, c: number) => !!data[o]?.[c]?.some((v) => v > 0);
   const doneCount = () => {
     let n = 0;
     for (let o = 0; o < OBS; o++) for (let c = 0; c < cellCount; c++) if (cellHasData(o, c)) n++;
     return n;
   };
   const totalUnits = OBS * cellCount;   // 48 (inside) or 6 (free-range)
-  const cellTotal = data[obs][active].reduce((a, b) => a + b, 0);
+  const cellTotal = (data[obs]?.[active] ?? []).reduce((a, b) => a + b, 0);
   // The status box shows the CURRENT cell's saved transcript when idle; otherwise the live
   // status/instruction/error text. Derived (not stored) so it's always right for this cell.
   const activeTranscript = transcripts[`${obs}-${active}`];
@@ -699,7 +700,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       </div>
       <div className="flex flex-col gap-1.5">
         {BEHAVIOURS.map((b, bi) => {
-          const v = data[obs][active][bi];
+          const v = data[obs]?.[active]?.[bi] ?? 0;
           return (
             <div key={b.name} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border ${v ? "bg-emerald-950/40 border-emerald-800" : "bg-gray-900 border-gray-800"}`}>
               <div className="flex-1">
@@ -807,13 +808,14 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               {Array.from({ length: OBS }, (_, o) =>
                 CELLS.map((c, ci) => {
                   const on = o === obs && ci === active;
-                  const sum = data[o][ci].reduce((a, b) => a + b, 0);
+                  const cellArr = data[o]?.[ci] ?? [];   // null-safe across a space switch
+                  const sum = cellArr.reduce((a, b) => a + b, 0);
                   return (
                     <tr key={`${o}-${ci}`} className={on ? "bg-emerald-900/40" : ""}>
                       <td className={`border border-gray-800 text-center px-2 ${ci === 0 ? "bg-gray-800/60 font-bold" : "bg-gray-900"}`}>{ci === 0 ? o + 1 : ""}</td>
                       <td className="border border-gray-800 text-center px-2 font-bold bg-gray-800/60">{c}</td>
-                      {data[o][ci].map((v, bi) => (
-                        <td key={bi} className="border border-gray-800 text-center px-1 bg-gray-900 min-w-[32px]">{v || ""}</td>
+                      {BEHAVIOURS.map((_, bi) => (
+                        <td key={bi} className="border border-gray-800 text-center px-1 bg-gray-900 min-w-[32px]">{cellArr[bi] || ""}</td>
                       ))}
                       <td className="border border-gray-800 text-center px-2 font-bold text-emerald-400 bg-emerald-950/40">{sum || ""}</td>
                     </tr>
