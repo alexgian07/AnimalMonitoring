@@ -37,7 +37,9 @@ export async function POST(req: NextRequest) {
     const timeOfDay: string | undefined = body.timeOfDay;
     const space: string = body.space || "inside";
     const replace: boolean = body.replace === true;
-    if (!tabName || !Array.isArray(rows)) throw new Error("Missing tabName/rows");
+    // Inside sends prebuilt `rows`; free-range sends raw `data` (validated in its own branch).
+    if (!tabName) throw new Error("Missing tabName");
+    if (space !== "free_range" && !Array.isArray(rows)) throw new Error("Missing rows");
 
     // Resolve who is committing, from Clerk, for the A1 note + audit trail. Best-effort.
     let who = "";
