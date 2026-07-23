@@ -142,6 +142,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [committing, setCommitting] = useState(false);          // commit/replace request in flight
   const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
   const saveTimerRef = useRef<number | null>(null);
+  // the latest not-yet-saved payload, so switching session/leaving can FLUSH it instead of dropping it
+  type SavePayload = { date: string; ampm: string; space: string; template: string; data: number[][][] };
+  const pendingSaveRef = useRef<SavePayload | null>(null);
   // saved transcript per cell, keyed `${obs}-${cell}` (0-based); shown on resume
   const [transcripts, setTranscripts] = useState<Record<string, string>>({});
   const recCellRef = useRef<{ obs: number; cell: number }>({ obs: 0, cell: 0 });
@@ -235,16 +238,20 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     if (total === 0) return;                  // nothing worth persisting yet
     if (sessionStatus === "committed") setDirtySinceCommit(true);   // edits diverge from the Sheet
     setSaveState("saving");
+    pendingSaveRef.current = { date: dateStr, ampm, space, template: isFree ? "free-range" : "22-july", data: state.data };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(async () => {
+      const p = pendingSaveRef.current;
+      if (!p) return;
       try {
         const res = await fetch("/api/ethogram/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ date: dateStr, ampm, space, template: isFree ? "free-range" : "22-july", data: state.data }),
+          body: JSON.stringify(p),
         });
         if (!res.ok) throw new Error();
         const d = await res.json();
+        pendingSaveRef.current = null;
         setSaveState("saved");
         if (d.status) setSessionStatus(d.status);
       } catch {
@@ -254,6 +261,24 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.data, dateStr, ampm, space]);
+
+  // Flush a pending debounced save when the session identity changes (or on unmount), so edits
+  // made just before switching date/AM-PM/space are never dropped. Uses the stored payload (old
+  // identity), so it saves the session being left — not the one being opened.
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+      const p = pendingSaveRef.current;
+      if (p) {
+        pendingSaveRef.current = null;
+        void fetch("/api/ethogram/session", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(p),
+        }).catch(() => {});
+      }
+    };
+  }, [dateStr, ampm, space]);
 
   const { data, obs, active } = state;
 
@@ -436,8 +461,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   async function commit() {
     const msg = isFree
-      ? `Commit ${ampm === "Π" ? "morning" : "lunch"} into day tab "${tabName()}"?\n` +
-        `${doneCount()}/${OBS} observations have data.\nThe other half-day already in that tab is preserved.`
+      ? `Commit day "${tabName()}" to Google Sheets?\n\n` +
+        `Writes the whole day into one tab — both ΠΡΩΙ (morning) and ΜΕΣΗΜΕΡΙ (lunch), ` +
+        `using whatever is currently saved for each. Re-commit any time to update it.`
       : `Commit tab "${tabName()}" to Google Sheets?\n${doneCount()}/${totalUnits} cells have data.`;
     if (!confirm(msg)) return;
     setCommitting(true);
@@ -698,7 +724,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
             // free-range: one upsert button (create-or-overwrite the day tab) — override is expected here
             <button onClick={commit} disabled={committing} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-emerald-950 font-bold flex items-center justify-center gap-2">
               {committing && <Spinner className="h-4 w-4" />}
-              {committing ? "Committing…" : `⬆ Commit ${ampm === "Π" ? "morning" : "lunch"} → day tab “${tabName()}”`}
+              {committing ? "Committing…" : `⬆ Commit day “${tabName()}” to Sheets (morning + lunch)`}
             </button>
           ) : sessionStatus === "committed" ? (
             <button onClick={replaceCommit} disabled={committing} className="flex-1 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white font-bold flex items-center justify-center gap-2">
