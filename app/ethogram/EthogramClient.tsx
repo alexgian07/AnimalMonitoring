@@ -464,6 +464,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     try {
       await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`, { method: "DELETE" });
       setNote("Cleared " + tabName() + " — the Google Sheet was not touched");
+      if (showPast) loadPast();   // refresh the history list so the cleared day disappears
     } catch {
       setNote("⚠ could not clear the saved session");
     }
