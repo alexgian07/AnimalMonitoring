@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AnimalMonitoring — Ethogram Voice + Research Dashboard
 
-## Getting Started
+A poultry-ethology research tool. Its centrepiece is **Ethogram Voice** (`/ethogram`): a researcher
+**dictates** behaviour tallies on a phone while watching a pen → the speech is transcribed and turned
+into structured counts → committed as a tidy tab in a master **Google Sheet**. It grew on top of an
+existing animal-monitoring dashboard (locations, weights, feed, tasks, stats).
 
-First, run the development server:
+**Live:** https://animal-monitoring.vercel.app
+
+---
+
+## Why it exists
+
+Scoring animal behaviour by hand (paper → spreadsheet) is slow and error-prone in the field. This
+lets an observer keep their eyes on the animals and just **talk**: "four running, three sitting…"
+(English **or Greek**), and the counts fill in on screen for a quick visual check before saving.
+
+## Stack
+
+| Concern | Tech |
+|---|---|
+| Framework | **Next.js 16** (App Router) + React 19, TypeScript, Tailwind |
+| Auth | **Clerk** (third-party auth → Supabase; no JWT template) |
+| Database | **Supabase** (Postgres + Row-Level Security) |
+| Speech → text | **Groq Whisper** (`whisper-large-v3`) |
+| Text → counts | **Groq** chat model (strict JSON schema) — LLM parsing, with a deterministic fallback |
+| Spreadsheet | **Google Sheets API** via a service account |
+| Hosting / CI | **Vercel** (push to `master` auto-deploys) |
+
+## How the ethogram flow works
+
+1. Pick an observation (+ cell, for the "inside" space) and **record**.
+2. Audio → `Groq Whisper` → transcript (language auto-detected: English/Greek).
+3. Transcript → **LLM** (`lib/ethogram/interpret.ts`, Groq, strict JSON) → per-behaviour counts.
+   Handles number-before/after, phrasing variety, in-clip self-corrections, and Greek. Falls back to
+   a deterministic parser (`lib/ethogram/parser.ts`) if the LLM call fails.
+4. Counts fill the grid; the transcript is shown for verification; **＋/−** fix anything by hand.
+5. Everything **autosaves** to Supabase (crash-safe resume); each transcript is kept as an audit trail.
+6. **Commit** → a new tab in the Google Sheet. Two "spaces" are supported: **Inside** (6 obs × 8
+   cells, one tab per half-day) and **Free-range** (per-observation, one tab per day).
+
+## Key design notes
+
+- **Google Sheets is the system of record**; Supabase is the crash-recovery net + audit trail.
+- Commits are **additive by default** (never overwrite a tab); the exceptions are a *guarded* replace
+  (inside) and an upsert for the app's own day-tab (free-range) — never a tab the app didn't create.
+- Full architecture, data model, and rationale: [`docs/ethogram/OVERVIEW.md`](docs/ethogram/OVERVIEW.md)
+  and the decision records in [`docs/adr/DECISIONS.md`](docs/adr/DECISIONS.md).
+- DB schema (single source of truth): [`supabase/schema.sql`](supabase/schema.sql).
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000  (ethogram is the default landing page)
+npm run build    # run before pushing — every push to master auto-deploys via Vercel
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create a `.env.local` (git-ignored) with:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 
-## Learn More
+# Groq (Whisper + LLM parsing)
+GROQ_API_KEY=...
+# GROQ_MODEL=whisper-large-v3        # optional
+# GROQ_LLM_MODEL=openai/gpt-oss-20b  # optional
 
-To learn more about Next.js, take a look at the following resources:
+# Google Sheets (service-account JSON as a single string)
+GOOGLE_CREDENTIALS={...}
+GSHEET_ID=...                        # inside master sheet id
+GSHEET_ID_FREERANGE=...              # free-range master sheet id
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The master Google Sheet must be a **native** Google Sheet (not an uploaded `.xlsx`) and shared with
+the service account's `client_email` as Editor. Apply `supabase/schema.sql` to your Supabase project.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Notes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Personal research project, not affiliated with any organisation. Contributions welcome via pull
+request — the repo is read-only to non-collaborators.
