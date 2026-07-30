@@ -193,6 +193,12 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
   audio); most errors are mic/environment or homophones (handled in the parser).
 - One recording = one cell. Within a clip she can say as much as she likes; a *second* clip is a
   Redo (replace), not an append.
+- **Clip size / "too long":** a single audio POST must stay under Vercel's ~4.5MB request-body
+  cap, else the platform rejects it before our code runs (surfaces as a "too long"-style error).
+  Mitigations: the recorder caps audio at **48kbps** (`audioBitsPerSecond`; ~0.5MB per 80s, only a
+  hint — falls back to the browser default if unsupported), and `transcribe` runs with
+  `maxDuration = 60` and logs the exact Groq failure for diagnosis. Whisper downsamples to 16kHz
+  mono, so 48kbps is transparent for speech.
 - The 2nd ethogram form type (mentioned but never seen) is **not** implemented.
 
 ---
