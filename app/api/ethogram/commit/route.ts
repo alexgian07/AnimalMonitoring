@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
 
     // Resolve who is committing, from Clerk, for the A1 note + audit trail. Best-effort.
     let who = "";
+    let whoName = "";
     try {
       const client = await clerkClient();
       const u = await client.users.getUser(userId);
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
       const email =
         u.primaryEmailAddress?.emailAddress ?? u.emailAddresses?.[0]?.emailAddress ?? "";
       who = [name, email && `(${email})`].filter(Boolean).join(" ");
+      whoName = name || email || userId;   // shown as "committed by <name>" to the team
     } catch {
       /* name resolution is best-effort; fall back to the user id below */
     }
@@ -152,6 +154,7 @@ export async function POST(req: NextRequest) {
             status: "committed",
             sheet_tab: tabName,
             committed_by: userId,
+            committed_by_name: whoName || userId,
             committed_at: nowIso,
             updated_at: nowIso,
           },

@@ -149,6 +149,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [dirtySinceCommit, setDirtySinceCommit] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);   // resume/reconcile fetch in flight
   const [committing, setCommitting] = useState(false);          // commit/replace request in flight
+  const [committedByOther, setCommittedByOther] = useState<string | null>(null); // another researcher committed this slot
   const hydratingRef = useRef(false);       // true = the next grid change is a load, not a user edit
   const saveTimerRef = useRef<number | null>(null);
   // the latest not-yet-saved payload, so switching session/leaving can FLUSH it instead of dropping it
@@ -158,7 +159,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [transcripts, setTranscripts] = useState<Record<string, string>>({});
   const recCellRef = useRef<{ obs: number; cell: number }>({ obs: 0, cell: 0 });
   // past-sessions browser
-  type PastSession = { date: string; ampm: string; status: string; sheetTab: string | null; updatedAt: string; filled: number };
+  type PastSession = { date: string; ampm: string; status: string; sheetTab: string | null; updatedAt: string; filled: number; mine: boolean; by: string | null };
   const [showPast, setShowPast] = useState(false);
   const [pastSessions, setPastSessions] = useState<PastSession[] | null>(null);
 
@@ -229,6 +230,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         for (const r of (d.recordings ?? []) as { obs: number; cell: number; transcript: string }[])
           tmap[`${r.obs - 1}-${r.cell - 1}`] = r.transcript;
         setTranscripts(tmap);
+        setCommittedByOther(d.committedByOther ?? null);
         setSaveState("idle");
       } catch {
         if (!cancelled) hydratingRef.current = false;   // load failed → allow normal saving
@@ -599,6 +601,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <div className="text-[11px] text-amber-400 mb-3 -mt-2">⚠ This date is in the future — check it's the right day.</div>
       )}
 
+      {committedByOther && (
+        <div className="text-xs text-amber-200 bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2 mb-3">
+          ⚠ <b>{committedByOther}</b> already committed this {isFree ? "day" : "slot"} to the Sheet. Recording here would duplicate their work — check with them first.
+        </div>
+      )}
+
       {/* observation selector */}
       <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5 mt-2">Observation</div>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -767,17 +775,20 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
           ) : pastSessions.length === 0 ? (
             <div className="px-3 py-3 text-sm text-gray-400">No saved sessions yet.</div>
           ) : (
-            pastSessions.map((s) => {
+            pastSessions.map((s, i) => {
               const [, m, dd] = s.date.split("-").map(Number);
-              const isCurrent = s.date === dateStr && s.ampm === ampm;
+              const isCurrent = s.date === dateStr && s.ampm === ampm && s.mine;
               return (
                 <button
-                  key={`${s.date}-${s.ampm}`}
+                  key={`${s.date}-${s.ampm}-${s.mine ? "me" : "o"}-${i}`}
                   onClick={() => { setDateStr(s.date); setAmpm(s.ampm as "Π" | "Μ"); setShowPast(false); }}
                   className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-gray-800 ${isCurrent ? "bg-gray-800/60" : ""}`}
                 >
                   <span className="font-bold text-emerald-400 min-w-[64px]">{dd}-{m} {s.ampm}</span>
-                  <span className="text-gray-300 flex-1">{s.filled}/{isFree ? OBS : 48} {isFree ? "obs" : "cells"}</span>
+                  <span className="text-gray-300 flex-1">
+                    {s.filled}/{isFree ? OBS : 48} {isFree ? "obs" : "cells"}
+                    {!s.mine && s.by && <span className="text-gray-500"> · 👤 {s.by}</span>}
+                  </span>
                   <span className={`text-xs ${s.status === "committed" ? "text-emerald-400" : "text-gray-500"}`}>
                     {s.status === "committed" ? "✓ committed" : "draft"}
                   </span>

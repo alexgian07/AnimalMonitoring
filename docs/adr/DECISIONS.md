@@ -138,6 +138,17 @@ those edits (most visible toggling free-range morning↔lunch, and it made day-t
 data for the sibling half). Fixed: the latest unsaved payload is kept in a ref and **flushed
 immediately** on session-identity change / unmount, so edits are saved to the session being left.
 
+**Update (2026-07-30) — team visibility:** the study has ~5 researchers sharing the Sheets, so the
+original ownership-only read was widened: **any signed-in user can read COMMITTED sessions (and their
+transcripts); drafts stay private to their owner; writes remain owner-only.** RLS is gated on a present
+Clerk `sub` so the public anon key reads nothing (sign-up is Restricted → only the researchers).
+Sessions store `committed_by_name` (resolved from Clerk at commit); the UI shows a **"committed by
+&lt;name&gt;" banner** when another researcher already committed the open day/slot, and the
+past-sessions list is **team-wide** (everyone's committed days, each labelled with who did it) plus
+your own drafts. The Sheet's additive/guarded commit already prevents overwriting a peer's tab; this
+adds the *awareness*. (Note: the app grid still loads *your* session — to view a peer's actual counts,
+open the Sheet; an in-app read-only peer view would be a further step.)
+
 ---
 
 ## ADR 0007 — Re-commit policy: guarded in-app Replace for app-owned tabs; never touch foreign tabs

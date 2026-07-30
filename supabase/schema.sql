@@ -228,6 +228,7 @@ CREATE TABLE ethogram_sessions (
   status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','committed')),
   sheet_tab    TEXT,                                             -- tab name once committed
   committed_by TEXT,                                             -- Clerk user id who committed
+  committed_by_name TEXT,                                        -- committer display name (for "committed by <name>")
   committed_at TIMESTAMPTZ,
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW(),
@@ -250,9 +251,13 @@ CREATE INDEX idx_ethogram_recordings_session ON ethogram_recordings(session_id);
 ALTER TABLE ethogram_sessions   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ethogram_recordings ENABLE ROW LEVEL SECURITY;
 
--- SESSIONS: owner manages own rows; admins may read all
+-- SESSIONS: any signed-in researcher may read COMMITTED sessions (team study) + their own drafts;
+-- writes stay owner-only. Gated on a present `sub` so the public anon key can read nothing.
 CREATE POLICY "ethogram_sessions_select" ON ethogram_sessions
-  FOR SELECT USING (user_id = current_setting('request.jwt.claims', true)::json->>'sub' OR is_admin());
+  FOR SELECT USING (
+    (current_setting('request.jwt.claims', true)::json->>'sub') IS NOT NULL
+    AND (status = 'committed' OR user_id = current_setting('request.jwt.claims', true)::json->>'sub')
+  );
 CREATE POLICY "ethogram_sessions_insert" ON ethogram_sessions
   FOR INSERT WITH CHECK (user_id = current_setting('request.jwt.claims', true)::json->>'sub');
 CREATE POLICY "ethogram_sessions_update" ON ethogram_sessions
@@ -262,11 +267,14 @@ CREATE POLICY "ethogram_sessions_delete" ON ethogram_sessions
 
 -- RECORDINGS: inherit ownership from the parent session
 CREATE POLICY "ethogram_recordings_select" ON ethogram_recordings
-  FOR SELECT USING (EXISTS (
-    SELECT 1 FROM ethogram_sessions s
-    WHERE s.id = session_id
-      AND (s.user_id = current_setting('request.jwt.claims', true)::json->>'sub' OR is_admin())
-  ));
+  FOR SELECT USING (
+    (current_setting('request.jwt.claims', true)::json->>'sub') IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM ethogram_sessions s
+      WHERE s.id = session_id
+        AND (s.status = 'committed' OR s.user_id = current_setting('request.jwt.claims', true)::json->>'sub')
+    )
+  );
 CREATE POLICY "ethogram_recordings_insert" ON ethogram_recordings
   FOR INSERT WITH CHECK (EXISTS (
     SELECT 1 FROM ethogram_sessions s

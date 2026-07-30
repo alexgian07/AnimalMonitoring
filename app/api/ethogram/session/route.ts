@@ -65,7 +65,22 @@ export async function GET(req: NextRequest) {
       recordings = (recs ?? []).map((r) => ({ obs: r.obs, cell: r.cell, transcript: r.transcript }));
     }
 
-    return NextResponse.json({ session: session ?? null, recordings });
+    // Team awareness: has ANOTHER researcher already committed this exact day/slot/space?
+    // (RLS allows reading others' committed rows.) The client shows a "committed by <name>" banner.
+    let committedByOther: string | null = null;
+    const { data: other } = await supabase
+      .from("ethogram_sessions")
+      .select("committed_by_name")
+      .eq("session_date", date)
+      .eq("time_of_day", ampm)
+      .eq("space", space)
+      .eq("status", "committed")
+      .neq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (other) committedByOther = other.committed_by_name || "another researcher";
+
+    return NextResponse.json({ session: session ?? null, recordings, committedByOther });
   } catch (e) {
     // Loading is best-effort: never block the UI if persistence is unavailable.
     return NextResponse.json({ session: null, recordings: [], error: (e as Error).message });

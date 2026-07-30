@@ -15,15 +15,17 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const spaceFilter = url.searchParams.get("space"); // optional: only this space
 
+    // Team view: everyone's COMMITTED sessions + the caller's own (draft or committed).
+    // RLS enforces the same rule; this .or mirrors it so others' private drafts aren't listed.
     let query = supabase
       .from("ethogram_sessions")
-      .select("session_date, time_of_day, status, sheet_tab, updated_at, data, space")
-      .eq("user_id", userId);
+      .select("session_date, time_of_day, status, sheet_tab, updated_at, data, space, user_id, committed_by_name")
+      .or(`status.eq.committed,user_id.eq.${userId}`);
     if (spaceFilter) query = query.eq("space", spaceFilter);
     const { data, error } = await query
       .order("session_date", { ascending: false })
       .order("time_of_day", { ascending: true })
-      .limit(60);
+      .limit(120);
     if (error) throw error;
 
     const sessions = (data ?? []).map((s) => {
@@ -42,6 +44,8 @@ export async function GET(req: NextRequest) {
         updatedAt: s.updated_at,
         space: s.space,
         filled,
+        mine: s.user_id === userId,
+        by: s.committed_by_name ?? null,
       };
     });
 
