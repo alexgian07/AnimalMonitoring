@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { text } = (await req.json()) as { text?: string };
-  const counts = await interpretTranscript(String(text || ""));
+  const { text, space } = (await req.json()) as { text?: string; space?: string };
+  const counts = await interpretTranscript(String(text || ""), space);
   return NextResponse.json({ counts });
 }

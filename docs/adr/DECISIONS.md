@@ -193,7 +193,8 @@ that happens to share the `D-M Π/Μ` name).
 **Context.** Besides the "inside" pens (the original feature: 6 obs × 8 cells K1–K8, one tab per
 `day + Π/Μ`), the study also has a **free-range/outside** space with its **own** Google Sheet and a
 **different layout**: **no cells** — each tab is ONE day holding both a `ΠΡΩΙ` and a `ΜΕΣΗΜΕΡΙ` block
-of 6 observations (`(time) | OBSERV | 22 behaviours`, no Cell/Σ). Same 22 behaviours.
+of 6 observations (`(time) | OBSERV | behaviours`, no Cell/Σ). Behaviour set is space-specific —
+see **ADR 0010** (free-range adds a 23rd, **Foraging**; originally assumed identical to inside's 22).
 
 **Decision.** One parameterized UI, not a fork. A **space selector** (Inside / Free range) at the top
 drives everything:
@@ -263,3 +264,38 @@ LLM is non-deterministic, mitigated by: strict schema + temp 0, the existing **h
 Optional future accuracy boost: add a **Greek glossary** of the researchers' actual terms to the
 system prompt. If the default model id is ever deprecated, set `GROQ_LLM_MODEL` — until then the
 fallback keeps the app working.
+
+---
+
+## ADR 0010 — Free-range gets a 23rd behaviour, **Foraging** (space-specific behaviour set)
+
+**Status:** Accepted (implemented 2026-07-30).
+
+**Context.** ADR 0008 assumed inside and free-range share the same 22 behaviours. Cross-validating a
+real free-range session against its transcripts showed the researcher consistently dictates
+**"Foraging"** (ground/substrate-directed searching for food — pecking + scratching the pasture),
+said *alongside* "Environmental Pecking" in the same clips, so to her they are **distinct**. Foraging
+wasn't in the list, so the LLM (constrained to the enum) **silently dropped it** — ~44 birds lost in
+one morning. Foraging is a standard poultry-ethology category and is heavily used outdoors but barely
+indoors, so it belongs to the **free-range form only**.
+
+**Decision.** Make the behaviour set **space-specific** instead of a single shared list:
+- `parser.ts`: `BEHAVIOURS` stays the inside 22; `FORAGING` is a new behaviour **appended** as
+  `FREE_BEHAVIOURS = [...BEHAVIOURS, FORAGING]` (23). `behavioursFor(space)` returns the right list.
+  Appended last so inside grid/sheet **column indices are unchanged** and inside is fully untouched.
+- **Grid** is now `[obs][cell][beh]` where `beh` length depends on space (22 inside / 23 free-range).
+  `emptyGrid`/`normalizeGrid` take a `behCount`; `normalizeGrid` **pads older 22-long free-range grids
+  to 23** (Foraging = 0) on load. The reducer preserves each cell's own length (no hard-coded 22).
+- **LLM:** `interpretTranscript(text, space)` builds its enum from `behavioursFor(space)`, so free-range
+  transcription can return Foraging. `/api/ethogram/transcribe?space=` and `/api/ethogram/interpret`
+  pass `space` through.
+- **Sheet:** free-range day tab (`freeRangeDayRows`) uses `FREE_BEHAVIOURS` → a **23rd column,
+  Foraging**, at the end (25 cols total, still within the `A1:Z100` clear range).
+- **Backfill:** today's free-range morning session had Foraging injected into the stored grid (index 22)
+  from its transcripts; the tab is corrected by re-committing that day from the app (owner-only).
+
+**Consequences.** Inside is unaffected (same 22, same indices). Free-range is 23 everywhere and older
+free-range grids upgrade transparently on load. If the outside master Sheet turns out to already have a
+Foraging column in a different position, only `FREE_BEHAVIOURS` order + a re-commit are needed — the
+data model doesn't care about column position. The deterministic fallback parser still knows only the
+shared 22 (Foraging relies on the LLM); acceptable, as the fallback is rare.

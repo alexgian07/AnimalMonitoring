@@ -3,13 +3,20 @@
  * handle phrasing variety, number-before-or-after, in-clip self-corrections, and Greek/English —
  * things the deterministic parser (lib/ethogram/parser.ts) can't. Returns null on any failure so
  * the caller can fall back to the deterministic parser. See ADR 0009. */
-import { BEHAVIOURS } from "./parser";
+import { behavioursFor } from "./parser";
 
 const MODEL = process.env.GROQ_LLM_MODEL || "openai/gpt-oss-20b";
-const NAMES = BEHAVIOURS.map((b) => b.name);
 
-const SYSTEM = `You convert a poultry-ethology field researcher's spoken tally into structured counts.
-During one short clip they say how many birds showed each behaviour. The 22 behaviours — use these EXACT names:
+/* Returns an array of length behavioursFor(space).length (count per behaviour for this clip), or
+ * null on failure. `space` picks the behaviour set: free-range adds Foraging (see parser.ts). */
+export async function interpretTranscript(text: string, space?: string): Promise<number[] | null> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key || !text || !text.trim()) return null;
+
+  const behaviours = behavioursFor(space);
+  const NAMES = behaviours.map((b) => b.name);
+  const SYSTEM = `You convert a poultry-ethology field researcher's spoken tally into structured counts.
+During one short clip they say how many birds showed each behaviour. The ${NAMES.length} behaviours — use these EXACT names:
 ${NAMES.map((n, i) => `${i + 1}. ${n}`).join("\n")}
 
 Rules:
@@ -18,11 +25,6 @@ Rules:
 - Honour self-corrections: "two, no three sitting" → Sitting = 3.
 - Ignore filler and anything not in the list. Only include behaviours actually counted, with n >= 1.
 - If nothing countable was said, return an empty list.`;
-
-/* Returns an array of length BEHAVIOURS.length (count per behaviour for this clip), or null on failure. */
-export async function interpretTranscript(text: string): Promise<number[] | null> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key || !text || !text.trim()) return null;
 
   try {
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -69,7 +71,7 @@ export async function interpretTranscript(text: string): Promise<number[] | null
     if (!content) return null;
 
     const parsed = JSON.parse(content) as { counts?: { behaviour: string; n: number }[] };
-    const arr = new Array(BEHAVIOURS.length).fill(0);
+    const arr = new Array(behaviours.length).fill(0);
     for (const c of parsed.counts ?? []) {
       const idx = NAMES.indexOf(c.behaviour);
       if (idx >= 0 && Number.isFinite(c.n) && c.n > 0) arr[idx] = Math.round(c.n);

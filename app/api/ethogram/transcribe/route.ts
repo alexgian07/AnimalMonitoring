@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
   const key = process.env.GROQ_API_KEY;
   if (!key) return NextResponse.json({ error: "GROQ_API_KEY is not set on the server" }, { status: 500 });
 
+  // space selects the behaviour set for interpretation (free-range adds Foraging).
+  const space = new URL(req.url).searchParams.get("space") || "inside";
   const ctype = req.headers.get("content-type") || "audio/webm";
   const ext = ctype.includes("mp4") ? "mp4" : ctype.includes("wav") ? "wav" : "webm";
   const buf = Buffer.from(await req.arrayBuffer());
@@ -50,6 +52,6 @@ export async function POST(req: NextRequest) {
   // LLM parse → per-behaviour counts for this clip; null on failure (client falls back to the
   // deterministic parser on the raw text). Returns both so the client can show the transcript.
   const text = typeof data.text === "string" ? data.text : "";
-  const counts = await interpretTranscript(text);
+  const counts = await interpretTranscript(text, space);
   return NextResponse.json({ text, counts });
 }

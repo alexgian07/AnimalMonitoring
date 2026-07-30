@@ -51,6 +51,10 @@ Eating, Drinking, Grooming, Preening, Env. Pecking, Agr.Pecking, Feather Pecking
 Dust bathing, Scratching, Flapping, Stretching, Perching, Strutting, Tail fanning, Wing dragging,
 Gobbling, Other vocalisation. (An earlier May template had only 18 — we target July.)
 
+**Behaviour set is space-specific** (ADR 0010): inside uses these **22**; **free-range adds a 23rd,
+`Foraging`** (`FREE_BEHAVIOURS` / `behavioursFor(space)` in `parser.ts`) — outdoor birds forage on
+pasture, indoor birds don't. Foraging is appended last, so inside column indices never move.
+
 ---
 
 ## 3. Architecture / file map

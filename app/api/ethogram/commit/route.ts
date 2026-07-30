@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { commitDay, replaceTab, upsertTab, tabExists, cellText, type Row } from "@/lib/ethogram/sheets";
-import { BEHAVIOURS, OBS } from "@/lib/ethogram/parser";
+import { FREE_BEHAVIOURS, OBS } from "@/lib/ethogram/parser";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -9,11 +9,11 @@ export const runtime = "nodejs";
 /* Free-range day tab layout: header, then a ΠΡΩΙ block (6 obs) and a ΜΕΣΗΜΕΡΙ block (6 obs),
  * separated by a blank row. Each grid is [obs][cell=1][behaviour]; missing halves render blank. */
 function freeRangeDayRows(morning: number[][][] | null, lunch: number[][][] | null): Row[] {
-  const head: Row = ["", "OBSERV.", ...BEHAVIOURS.map((b) => b.name)];
+  const head: Row = ["", "OBSERV.", ...FREE_BEHAVIOURS.map((b) => b.name)];
   const rows: Row[] = [head];
   const block = (grid: number[][][] | null, label: string) => {
     for (let o = 0; o < OBS; o++) {
-      const counts = grid?.[o]?.[0] ?? BEHAVIOURS.map(() => 0);
+      const counts = grid?.[o]?.[0] ?? FREE_BEHAVIOURS.map(() => 0);
       rows.push([o === 0 ? label : "", o + 1, ...counts.map((v) => (v || "") as string | number)]);
     }
   };

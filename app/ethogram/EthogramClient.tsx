@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
-import { BEHAVIOURS, CELLS, OBS, CATS, parseToOps, type Op } from "@/lib/ethogram/parser";
+import { BEHAVIOURS, CELLS, OBS, CATS, behavioursFor, parseToOps, type Op } from "@/lib/ethogram/parser";
 
 /* ---------------- state + reducer ---------------- */
 type HistEntry = { obs: number; cell: number; beh: number; delta: number };
@@ -13,16 +13,17 @@ type State = {
   history: HistEntry[];
 };
 
-// empty [obs][cell][beh] grid for a given cell count (inside = 8 cells, free-range = 1),
-// and a normaliser that coerces a stored grid back to the expected dimensions.
-const emptyGrid = (cellCount: number): number[][][] =>
-  Array.from({ length: OBS }, () => Array.from({ length: cellCount }, () => BEHAVIOURS.map(() => 0)));
-const normalizeGrid = (raw: unknown, cellCount: number): number[][][] => {
-  const g = emptyGrid(cellCount);
+// empty [obs][cell][beh] grid for a given cell count (inside = 8 cells, free-range = 1) and
+// behaviour count (inside = 22, free-range = 23 incl. Foraging), plus a normaliser that coerces a
+// stored grid back to the expected dimensions (also pads older free-range grids to 23 behaviours).
+const emptyGrid = (cellCount: number, behCount: number): number[][][] =>
+  Array.from({ length: OBS }, () => Array.from({ length: cellCount }, () => Array.from({ length: behCount }, () => 0)));
+const normalizeGrid = (raw: unknown, cellCount: number, behCount: number): number[][][] => {
+  const g = emptyGrid(cellCount, behCount);
   const r = raw as number[][][] | undefined;
   for (let o = 0; o < OBS; o++)
     for (let c = 0; c < cellCount; c++)
-      for (let b = 0; b < BEHAVIOURS.length; b++) {
+      for (let b = 0; b < behCount; b++) {
         const v = r?.[o]?.[c]?.[b];
         if (typeof v === "number" && v > 0) g[o][c][b] = v;
       }
@@ -30,7 +31,7 @@ const normalizeGrid = (raw: unknown, cellCount: number): number[][][] => {
 };
 
 function initState(): State {
-  return { data: emptyGrid(CELLS.length), obs: 0, active: 0, lastBehaviour: null, history: [] };
+  return { data: emptyGrid(CELLS.length, BEHAVIOURS.length), obs: 0, active: 0, lastBehaviour: null, history: [] };
 }
 const cloneData = (d: number[][][]) => d.map((o) => o.map((c) => c.slice()));
 
@@ -105,7 +106,7 @@ function reducer(state: State, action: Action): State {
     }
     case "clearCell": {
       const data = cloneData(state.data);
-      data[state.obs][state.active] = BEHAVIOURS.map(() => 0);
+      data[state.obs][state.active] = data[state.obs][state.active].map(() => 0);
       const history = state.history.filter((h) => !(h.obs === state.obs && h.cell === state.active));
       return { ...state, data, history };
     }
@@ -113,7 +114,7 @@ function reducer(state: State, action: Action): State {
       // LLM result for the current clip → set the active cell's counts outright (a clip replaces
       // the cell). Drop this cell's manual history since we've overwritten it.
       const data = cloneData(state.data);
-      data[state.obs][state.active] = BEHAVIOURS.map((_, i) => Math.max(0, Math.round(action.counts[i] || 0)));
+      data[state.obs][state.active] = data[state.obs][state.active].map((_, i) => Math.max(0, Math.round(action.counts[i] || 0)));
       const history = state.history.filter((h) => !(h.obs === state.obs && h.cell === state.active));
       return { ...state, data, history, lastBehaviour: null };
     }
@@ -137,6 +138,9 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   const [space, setSpace] = useState<"inside" | "free_range">("inside");
   const cellCount = space === "free_range" ? 1 : CELLS.length;
   const isFree = space === "free_range";
+  // behaviour set for this space: free-range = 22 + Foraging (23), inside = 22
+  const behs = behavioursFor(space);
+  const behCount = behs.length;
   const [heard, setHeard] = useState<{ text: string; err?: boolean }>({ text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
   const [recState, setRecState] = useState<"idle" | "recording" | "busy">("idle");
   const [showGrid, setShowGrid] = useState(false);
@@ -207,7 +211,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         if (cancelled) return;
         hydratingRef.current = true;          // block the autosave the hydrate dispatch triggers
         if (d.session?.data?.length) {
-          dispatch({ type: "hydrate", data: normalizeGrid(d.session.data, cellCount) });
+          dispatch({ type: "hydrate", data: normalizeGrid(d.session.data, cellCount, behCount) });
           setSessionStatus(d.session.status ?? "draft");
           setHeard({
             text: d.session.status === "committed"
@@ -215,7 +219,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               : "Resumed your saved session.",
           });
         } else {
-          dispatch({ type: "hydrate", data: emptyGrid(cellCount) });
+          dispatch({ type: "hydrate", data: emptyGrid(cellCount, behCount) });
           setSessionStatus(null);
         }
         // committed session with edits after the commit → "edited since commit".
@@ -321,8 +325,8 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   const buildRows = (): (string | number)[][] => {
     if (isFree) {
-      // free-range: one block for the current half — (time) | OBSERV | 22 behaviours (no Cell/Σ)
-      const head = ["", "OBSERV.", ...BEHAVIOURS.map((b) => b.name)];
+      // free-range: one block for the current half — (time) | OBSERV | 23 behaviours incl. Foraging (no Cell/Σ)
+      const head = ["", "OBSERV.", ...behs.map((b) => b.name)];
       const rows: (string | number)[][] = [head];
       const label = ampm === "Π" ? "ΠΡΩΙ" : "ΜΕΣΗΜΕΡΙ";
       for (let o = 0; o < OBS; o++)
@@ -387,7 +391,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       setHeard({ text: "… transcribing" });
       const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
       try {
-        const res = await fetch("/api/ethogram/transcribe", {
+        const res = await fetch(`/api/ethogram/transcribe?space=${space}`, {
           method: "POST",
           headers: { "content-type": blob.type || "audio/webm" },
           body: blob,
@@ -466,7 +470,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       `It does NOT delete anything already written to Google Sheets.`,
     )) return;
     hydratingRef.current = true;            // stop autosave from re-creating the row from the blank grid
-    dispatch({ type: "hydrate", data: emptyGrid(cellCount) });
+    dispatch({ type: "hydrate", data: emptyGrid(cellCount, behCount) });
     setSessionStatus(null);
     setSaveState("idle");
     setTranscripts({});
@@ -713,7 +717,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         <span className="text-xs text-gray-400">{cellTotal ? cellTotal + " scored" : ""}</span>
       </div>
       <div className="flex flex-col gap-1.5">
-        {BEHAVIOURS.map((b, bi) => {
+        {behs.map((b, bi) => {
           const v = data[obs]?.[active]?.[bi] ?? 0;
           return (
             <div key={b.name} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border ${v ? "bg-emerald-950/40 border-emerald-800" : "bg-gray-900 border-gray-800"}`}>

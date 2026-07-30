@@ -34,6 +34,21 @@ export const BEHAVIOURS: Behaviour[] = [
   { name: "Other vocalisation", cat: "disp", syn: ["other vocalisation", "vocalisation", "vocalization", "vocalising", "vocalizing", "calling", "call", "vocalise"] },
 ];
 
+/* Free-range-only extra behaviour: Foraging — ground/substrate-directed searching for food
+ * (pecking + scratching at the pasture in search of food). Distinct from Eating (ingesting feed)
+ * and Environmental Pecking (non-food object pecking); outdoor birds do it heavily, indoor birds
+ * barely, so it is tracked for the free-range form ONLY. Appended AFTER the shared 22 so inside
+ * grids/sheet columns keep their indices; free-range grids/sheets get this as a 23rd column. */
+export const FORAGING: Behaviour = {
+  name: "Foraging", cat: "gen", syn: ["foraging", "forage", "forages", "foraged"],
+};
+export const FREE_BEHAVIOURS: Behaviour[] = [...BEHAVIOURS, FORAGING];
+
+/* Behaviour list for an animal space: inside = the shared 22; free-range = 22 + Foraging (23). */
+export function behavioursFor(space?: string): Behaviour[] {
+  return space === "free_range" ? FREE_BEHAVIOURS : BEHAVIOURS;
+}
+
 export const CELLS = ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"];
 export const OBS = 6;
 
