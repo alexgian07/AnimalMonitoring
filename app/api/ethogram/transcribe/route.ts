@@ -3,6 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { interpretTranscript } from "@/lib/ethogram/interpret";
 
 export const runtime = "nodejs";
+// Whisper + LLM parse run in this one request; give it room so longer clips don't hit the
+// default (~10s) serverless timeout. 60s is the Vercel Hobby max.
+export const maxDuration = 60;
 
 // large-v3 is more accurate than turbo (better on numbers/accents), still fast on Groq.
 const MODEL = process.env.GROQ_MODEL || "whisper-large-v3";
@@ -37,7 +40,12 @@ export async function POST(req: NextRequest) {
     body: form,
   });
   const data = await r.json();
-  if (!r.ok) return NextResponse.json(data, { status: r.status });
+  if (!r.ok) {
+    // log the exact Groq failure so long-clip / limit errors are diagnosable in Vercel logs
+    console.error("[ethogram/transcribe] Groq failed", r.status, JSON.stringify(data).slice(0, 600));
+    const msg = data?.error?.message || data?.error || `Transcription failed (${r.status})`;
+    return NextResponse.json({ error: msg, status: r.status }, { status: r.status });
+  }
 
   // LLM parse → per-behaviour counts for this clip; null on failure (client falls back to the
   // deterministic parser on the raw text). Returns both so the client can show the transcript.
