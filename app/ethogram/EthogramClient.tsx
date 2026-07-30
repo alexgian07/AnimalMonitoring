@@ -365,7 +365,13 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       : MediaRecorder.isTypeSupported("audio/mp4")
         ? "audio/mp4"
         : "";
-    const rec = new MediaRecorder(streamRef.current, mime ? { mimeType: mime } : undefined);
+    // Cap the audio bitrate so long clips stay small: some phones default to a high bitrate and a
+    // longer/short-but-dense clip can exceed the platform's ~4.5MB request cap ("too long"). 48kbps
+    // is transparent for speech (Whisper downsamples to 16kHz mono anyway); an 80s clip ≈ 0.5MB.
+    // This is only a hint — unsupported codecs silently fall back to the browser default (no regression).
+    const recOpts: MediaRecorderOptions = { audioBitsPerSecond: 48000 };
+    if (mime) recOpts.mimeType = mime;
+    const rec = new MediaRecorder(streamRef.current, recOpts);
     mediaRef.current = rec;
     chunksRef.current = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
