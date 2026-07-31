@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { BEHAVIOURS, CELLS, OBS, CATS, behavioursFor, parseToOps, type Op } from "@/lib/ethogram/parser";
+import { toWav16kMono } from "@/lib/ethogram/wav";
 
 /* ---------------- state + reducer ---------------- */
 type HistEntry = { obs: number; cell: number; beh: number; delta: number };
@@ -389,13 +390,37 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       }
       setRecState("busy");
       setHeard({ text: "… transcribing" });
-      const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+      const raw = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+      // Down-encode to 16kHz mono WAV so the upload size is deterministic (~32KB/s) regardless of the
+      // device's real bitrate — keeps long clips under Vercel's ~4.5MB body cap (audioBitsPerSecond is
+      // only a hint and is ignored on some phones). Falls back to `raw` if the browser can't decode.
+      const { blob: upload, reencoded } = await toWav16kMono(raw);
       try {
         const res = await fetch(`/api/ethogram/transcribe?space=${space}`, {
           method: "POST",
-          headers: { "content-type": blob.type || "audio/webm" },
-          body: blob,
+          headers: { "content-type": upload.type || "audio/webm" },
+          body: upload,
         });
+        if (!res.ok) {
+          // A 413 (payload too large) is rejected at the platform edge and never hits our function, so
+          // it isn't in the server logs — beacon the sizes/status so we can still see it. Best-effort.
+          fetch("/api/ethogram/clientlog", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              stage: "transcribe", status: res.status, rawBytes: raw.size, uploadBytes: upload.size,
+              reencoded, mime: raw.type, ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
+            }),
+          }).catch(() => {});
+          setHeard({
+            text: res.status === 413
+              ? "⚠ clip too large to upload — please record a shorter take."
+              : `⚠ upload failed (${res.status}) — please try again.`,
+            err: true,
+          });
+          setRecState("idle");
+          return;
+        }
         const d = await res.json();
         if (d.text != null) {
           const text = d.text.trim();

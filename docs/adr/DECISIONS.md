@@ -299,3 +299,41 @@ free-range grids upgrade transparently on load. If the outside master Sheet turn
 Foraging column in a different position, only `FREE_BEHAVIOURS` order + a re-commit are needed — the
 data model doesn't care about column position. The deterministic fallback parser still knows only the
 shared 22 (Foraging relies on the LLM); acceptable, as the fallback is rare.
+
+---
+
+## ADR 0011 — Long clips fail on upload → client-side 16 kHz-mono-WAV down-encode
+
+**Status:** Accepted (implemented 2026-07-31).
+
+**Context.** A researcher's first real free-range session failed **every time she recorded longer than
+~1 minute** ("too long"), so she gave up before doing inside. Vercel runtime logs were decisive: the
+successful (shorter) clips log `200`, but the failing long ones **never appear at all** — no runtime
+error, no `console.error`, no function invocation. That signature = **Vercel's ~4.5 MB serverless
+request-body limit rejecting the upload with a 413 at the platform edge, before `/transcribe` runs**.
+So it's **upload size**, definitively — not a Groq duration limit and not a function timeout (either
+would have run the function and logged). Earlier mitigations — `maxDuration = 60` (ADR-less, commit
+`4683fa4`) and a **48 kbps `audioBitsPerSecond` cap** (`a776bff`) — didn't hold: `audioBitsPerSecond`
+is only a **hint** and is ignored on some devices (iOS Safari, and evidently her Android too), so long
+clips stayed large.
+
+**Decision.** Make the uploaded size **deterministic and device-independent** by re-encoding the
+recording **client-side before upload**:
+- `lib/ethogram/wav.ts` `toWav16kMono(blob)` — Web Audio API `decodeAudioData` →
+  `OfflineAudioContext(1, …, 16000)` resample → **16 kHz mono 16-bit PCM WAV**. No external library.
+  **~32 KB/s** ⇒ 80 s ≈ 2.6 MB, ~2 min under the 4.5 MB cap. 16 kHz mono is transparent for speech
+  (Whisper downsamples to 16 kHz regardless), so **no accuracy cost**.
+- **Never breaks recording:** if the browser can't decode the recorded container, it returns the
+  original blob (`reencoded:false`) and we upload that.
+- **Visibility:** `/transcribe` logs the received byte size; on any non-OK upload the client fires a
+  `/api/ethogram/clientlog` beacon (status, raw/upload bytes, `reencoded`, UA) so **edge-rejected 413s
+  are still observable** despite leaving no server trace. A 413 now shows a clear "record a shorter
+  take" message instead of a raw network error.
+- The 48 kbps hint stays (harmless, shrinks the intermediate blob), but correctness no longer depends
+  on it.
+
+**Consequences.** Long clips (her 70–90 s target, up to ~2 min) upload reliably on any device. Cost is
+one client-side decode+resample per clip (fine for these lengths). For **clips beyond ~2 min** the WAV
+would approach the cap again — the deferred escalation is a **storage relay** (client → Supabase
+Storage/Blob → function fetches it), which removes the request-body limit entirely. See
+`docs/ethogram/OVERVIEW.md` §9.

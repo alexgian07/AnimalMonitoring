@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
   const ctype = req.headers.get("content-type") || "audio/webm";
   const ext = ctype.includes("mp4") ? "mp4" : ctype.includes("wav") ? "wav" : "webm";
   const buf = Buffer.from(await req.arrayBuffer());
+  // log upload size so we can confirm the client down-encode is keeping clips under the ~4.5MB cap
+  console.log("[ethogram/transcribe] bytes", buf.length, ctype, "space", space);
 
   const form = new FormData();
   form.append("file", new Blob([buf], { type: ctype }), "audio." + ext);

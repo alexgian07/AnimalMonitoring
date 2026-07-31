@@ -197,12 +197,15 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
   audio); most errors are mic/environment or homophones (handled in the parser).
 - One recording = one cell. Within a clip she can say as much as she likes; a *second* clip is a
   Redo (replace), not an append.
-- **Clip size / "too long":** a single audio POST must stay under Vercel's ~4.5MB request-body
-  cap, else the platform rejects it before our code runs (surfaces as a "too long"-style error).
-  Mitigations: the recorder caps audio at **48kbps** (`audioBitsPerSecond`; ~0.5MB per 80s, only a
-  hint — falls back to the browser default if unsupported), and `transcribe` runs with
-  `maxDuration = 60` and logs the exact Groq failure for diagnosis. Whisper downsamples to 16kHz
-  mono, so 48kbps is transparent for speech.
+- **Clip size / "too long" (ADR 0011):** a single audio POST must stay under Vercel's ~4.5MB
+  request-body cap, else the platform rejects it with a **413 *before* our code runs** (no server
+  log; surfaces as a "too long"-style error). The `audioBitsPerSecond` **48kbps hint alone was not
+  enough** — it's ignored on some devices, so long clips still blew the cap. **Real fix:** the client
+  **re-encodes every recording to 16kHz mono WAV before upload** (`lib/ethogram/wav.ts`,
+  `toWav16kMono`) → deterministic **~32KB/s** (80s ≈ 2.6MB, ~2min stays under the cap), regardless of
+  device bitrate; Whisper downsamples to 16kHz anyway so no accuracy loss. Also: `transcribe` runs
+  `maxDuration = 60` + logs the received byte size and the exact Groq failure; a 413/upload failure
+  fires a `clientlog` beacon (sizes/status/UA) so edge-rejected uploads are still visible in logs.
 - The 2nd ethogram form type (mentioned but never seen) is **not** implemented.
 
 ---
