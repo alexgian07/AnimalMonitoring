@@ -207,6 +207,13 @@ Windows note: if the Supabase `npx` server fails to start, try `"command": "cmd"
   `maxDuration = 60` + logs the received byte size and the exact Groq failure; a 413/upload failure
   fires a `clientlog` beacon (sizes/status/UA) so edge-rejected uploads are still visible in logs.
 - The 2nd ethogram form type (mentioned but never seen) is **not** implemented.
+- **Maintainer admin tooling** (`scripts/`): commits are **owner-only**, so DB corrections to a session
+  another researcher committed can't reach the Sheet via the app. `scripts/admin-recommit.mjs
+  <date> <Π|Μ> <inside|free_range> [--write]` pushes a session's stored counts to its tab via the
+  service account, bypassing the guard (dry-run without `--write`; `inside` only for now). It has an
+  `A1=="OBSERV."` safety check. `scripts/list-tabs.mjs [sheetId]` lists a sheet's tabs. Both read
+  local `.env.local` — inert without those (git-ignored) secrets, so safe in the repo. **Gotcha:**
+  keep local `GSHEET_ID` in sync with Vercel (it drifted stale once — see the tab list before writing).
 
 ---
 
