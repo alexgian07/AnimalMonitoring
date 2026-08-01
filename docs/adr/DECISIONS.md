@@ -265,15 +265,22 @@ Optional future accuracy boost: add a **Greek glossary** of the researchers' act
 system prompt. If the default model id is ever deprecated, set `GROQ_LLM_MODEL` — until then the
 fallback keeps the app working.
 
-**Update (2026-08-01) — noise-robustness.** A real afternoon session was recorded in a **noisy** barn;
-Whisper mis-heard many words (esp. the **perching** roost count → "petting/patching/petching…"), which
-the interpreter then dropped or mis-mapped (→ Standing/Feather Pecking), and in the worst cell it even
-**fabricated** counts from pure word-salad. The interpreter `SYSTEM` prompt now (a) tells the model the
-audio is noisy STT and to **map a count next to a near-homophone to the intended behaviour** (with the
-observed mishearing lists — perching variants, packing/peking→Pecking, shitting/seating→Sitting,
-to→2 / for→4 homophone numbers), and (b) **guards against inventing counts from gibberish** (skip
-unintelligible stretches). The raw transcript stays stored, so a noisy clip can be **re-interpreted**
-later with the improved prompt via `/api/ethogram/interpret` without re-recording.
+**Update (2026-08-01) — noise-robustness (two layers).** A real afternoon session was recorded in a
+**noisy** barn; Whisper mis-heard many words (esp. the **perching** roost count →
+"petting/patching/petching…"), which the interpreter then dropped or mis-mapped (→ Standing/Feather
+Pecking), and in the worst cell it even **fabricated** counts from pure word-salad. Fix is two layers:
+1. **Deterministic pre-pass** — `lib/ethogram/mishearings.ts` `normalizeMishearings()` is a small
+   data-driven glossary of **unambiguous** mistranscriptions (perching variants, `packing`→pecking,
+   `gobling`→gobbling) applied to the text **before** the LLM. Costs **zero tokens**, is 100% reliable,
+   and is meant to be **extended from `/ethogram-audit` findings**. Ambiguous ones (seating,
+   peking, stopping, pens) are deliberately left out — the model judges those.
+2. **Leaner prompt** — because the explicit list moved into code, the `SYSTEM` prompt keeps only
+   *general* noise guidance ("map a count next to a near-homophone to the intended behaviour"),
+   homophone numbers (to→2 / for→4), and a **guard against inventing counts from gibberish**. Shorter
+   prompt = kinder to the free tier / context (per the maintainer's constraint).
+Raw transcripts stay stored, so a noisy clip can be **re-interpreted** later (improved prompt+glossary)
+via `/api/ethogram/interpret` without re-recording. Heavier options (fine-tuning on the accumulating
+transcript→counts pairs; RAG) are noted but not worth it at this scale.
 
 ---
 
