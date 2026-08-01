@@ -265,6 +265,16 @@ Optional future accuracy boost: add a **Greek glossary** of the researchers' act
 system prompt. If the default model id is ever deprecated, set `GROQ_LLM_MODEL` — until then the
 fallback keeps the app working.
 
+**Update (2026-08-01) — noise-robustness.** A real afternoon session was recorded in a **noisy** barn;
+Whisper mis-heard many words (esp. the **perching** roost count → "petting/patching/petching…"), which
+the interpreter then dropped or mis-mapped (→ Standing/Feather Pecking), and in the worst cell it even
+**fabricated** counts from pure word-salad. The interpreter `SYSTEM` prompt now (a) tells the model the
+audio is noisy STT and to **map a count next to a near-homophone to the intended behaviour** (with the
+observed mishearing lists — perching variants, packing/peking→Pecking, shitting/seating→Sitting,
+to→2 / for→4 homophone numbers), and (b) **guards against inventing counts from gibberish** (skip
+unintelligible stretches). The raw transcript stays stored, so a noisy clip can be **re-interpreted**
+later with the improved prompt via `/api/ethogram/interpret` without re-recording.
+
 ---
 
 ## ADR 0010 — Free-range gets a 23rd behaviour, **Foraging** (space-specific behaviour set)
