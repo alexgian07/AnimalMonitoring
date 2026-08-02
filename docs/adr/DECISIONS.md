@@ -282,6 +282,14 @@ Raw transcripts stay stored, so a noisy clip can be **re-interpreted** later (im
 via `/api/ethogram/interpret` without re-recording. Heavier options (fine-tuning on the accumulating
 transcript→counts pairs; RAG) are noted but not worth it at this scale.
 
+**Update (2026-08-02) — dropped-numbers at the Whisper layer.** A clip came back as a clean list of
+behaviour *names* with **no numbers**, so it counted nothing. Cause: the Whisper `prompt` (a
+style/vocab **bias**, not a filter) was a bare **name list**, which on an unclear clip nudged Whisper
+to emit names and drop the spoken numbers. Fix: the prompt is now a **natural counting example** with
+numbers **before and after** the word (order-agnostic — the LLM still handles either order) + the vocab
+(now incl. Foraging). Backstop: the client shows a **"heard words but no numbers — record again"**
+warning when a non-empty transcript yields zero counts, so an empty cell is never committed silently.
+
 ---
 
 ## ADR 0010 — Free-range gets a 23rd behaviour, **Foraging** (space-specific behaviour set)

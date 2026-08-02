@@ -424,13 +424,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
         const d = await res.json();
         if (d.text != null) {
           const text = d.text.trim();
+          const counts = Array.isArray(d.counts) ? d.counts : null;
           // LLM counts if available; otherwise fall back to the deterministic parser on the text
-          if (Array.isArray(d.counts)) dispatch({ type: "setCounts", counts: d.counts });
+          if (counts) dispatch({ type: "setCounts", counts });
           else dispatch({ type: "ops", ops: parseToOps(d.text) });
           if (text) {
             const { obs: ro, cell: rc } = recCellRef.current;
-            // transcript is shown via the (derived) status box; reset heard to the prompt
-            setHeard({ text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
             setTranscripts((m) => ({ ...m, [`${ro}-${rc}`]: text }));
             // persist the transcript (audit trail); best-effort, never blocks the UI
             fetch("/api/ethogram/recording", {
@@ -438,6 +437,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ date: dateStr, ampm, space, obs: ro + 1, cell: rc + 1, transcript: text }),
             }).catch(() => {});
+            // Guard: words came through but nothing was countable — usually Whisper dropped the
+            // numbers. Warn instead of silently leaving the cell empty (transcript is still shown).
+            const total = counts ? counts.reduce((a, b) => a + (b || 0), 0) : 1;
+            setHeard(total === 0
+              ? { text: "⚠ heard words but no numbers — check the clip and record again.", err: true }
+              : { text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
           } else {
             setHeard({ text: "(nothing heard)" });
           }

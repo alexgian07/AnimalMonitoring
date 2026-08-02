@@ -9,11 +9,17 @@ export const maxDuration = 60;
 
 // large-v3 is more accurate than turbo (better on numbers/accents), still fast on Groq.
 const MODEL = process.env.GROQ_MODEL || "whisper-large-v3";
+// Whisper `prompt` = a style/vocabulary bias, NOT a filter. A bare list of behaviour NAMES biased it
+// toward emitting names and dropping the spoken NUMBERS on unclear clips. So prime it with a natural
+// counting example — numbers BEFORE and AFTER the word (order-agnostic), the way researchers actually
+// dictate — plus the vocabulary (incl. Foraging) so spelling still gets help. The LLM structures it.
 const VOCAB =
-  "Walking, Standing, Sitting, Running, Eating, Drinking, Grooming, Preening, " +
-  "Environmental Pecking, Aggressive Pecking, Feather Pecking, Fighting, Dust bathing, " +
-  "Scratching, Flapping, Stretching, Perching, Strutting, Tail fanning, Wing dragging, " +
-  "Gobbling, Other vocalisation.";
+  "Field count of poultry behaviours, spoken naturally, numbers before or after the word — e.g.: " +
+  "five walking, three sitting, environmental pecking two, one foraging, perching six, four eating, " +
+  "standing three, one drinking. Behaviours: Walking, Standing, Sitting, Running, Eating, Drinking, " +
+  "Grooming, Preening, Environmental Pecking, Aggressive Pecking, Feather Pecking, Fighting, " +
+  "Dust bathing, Scratching, Flapping, Stretching, Perching, Strutting, Tail fanning, Wing dragging, " +
+  "Gobbling, Other vocalisation, Foraging.";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
