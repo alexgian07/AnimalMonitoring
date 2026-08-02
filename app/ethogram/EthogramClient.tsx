@@ -439,7 +439,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
             }).catch(() => {});
             // Guard: words came through but nothing was countable — usually Whisper dropped the
             // numbers. Warn instead of silently leaving the cell empty (transcript is still shown).
-            const total = counts ? counts.reduce((a, b) => a + (b || 0), 0) : 1;
+            const total = counts ? counts.reduce((a: number, b: number) => a + (b || 0), 0) : 1;
             setHeard(total === 0
               ? { text: "⚠ heard words but no numbers — check the clip and record again.", err: true }
               : { text: "Pick observation + cell, tap Record, speak the tallies, tap Stop." });
