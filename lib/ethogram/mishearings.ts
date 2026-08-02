@@ -16,8 +16,19 @@ export const MISHEARINGS: Record<string, string> = {
   peaching: "perching", spercing: "perching", purching: "perching",
   // Pecking — only the tail word changes; any Environmental/Aggressive/Feather prefix is preserved
   packing: "pecking", packings: "pecking",
+  // Foraging (free-range) — Whisper mangles it and the LLM otherwise mis-maps it to "Other
+  // vocalisation". Single-token garbles (multi-word ones are in PHRASES below).
+  oraging: "foraging", oragging: "foraging", voraging: "foraging", foraing: "foraging",
+  oradzink: "foraging", oraying: "foraging",
   // Misc unambiguous
   gobling: "gobbling", goblings: "gobbling",
+};
+
+// Multi-word mishearings — replaced before the single-token pass (e.g. spoken "foraging" heard as
+// two words when the leading "f" is dropped).
+const PHRASES: Record<string, string> = {
+  "floor aging": "foraging",
+  "for aging": "foraging",
 };
 
 const RE = new RegExp("\\b(" + Object.keys(MISHEARINGS).join("|") + ")\\b", "gi");
@@ -25,5 +36,7 @@ const RE = new RegExp("\\b(" + Object.keys(MISHEARINGS).join("|") + ")\\b", "gi"
 /* Replace known mishearings (case-insensitive, whole-word) with the intended word. Pure + free. */
 export function normalizeMishearings(text: string): string {
   if (!text) return text;
-  return text.replace(RE, (m) => MISHEARINGS[m.toLowerCase()] ?? m);
+  let t = text;
+  for (const [k, v] of Object.entries(PHRASES)) t = t.replace(new RegExp("\\b" + k + "\\b", "gi"), v);
+  return t.replace(RE, (m) => MISHEARINGS[m.toLowerCase()] ?? m);
 }
