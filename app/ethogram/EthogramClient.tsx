@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { BEHAVIOURS, CELLS, OBS, CATS, behavioursFor, parseToOps, type Op } from "@/lib/ethogram/parser";
 import { toWav16kMono } from "@/lib/ethogram/wav";
 
@@ -130,6 +131,36 @@ function reducer(state: State, action: Action): State {
 /* ---------------- component ---------------- */
 export default function EthogramClient({ commitEnabled }: { commitEnabled: boolean }) {
   const [state, dispatch] = useReducer(reducer, undefined, initState);
+
+  const { getToken } = useAuth();
+  const [sessionExpired, setSessionExpired] = useState(false);
+  /* Fetch wrapper for /api/ethogram/*: a 401 is almost always a STALE Clerk token — the tab was
+   * backgrounded (common on phones) so the short-lived session token wasn't refreshed. Force a fresh
+   * token and retry once; if it's STILL 401 the session is genuinely gone → show the re-login prompt
+   * (below) instead of the old silent/confusing "upload failed (401)". */
+  const authFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    let res = await fetch(input, init);
+    if (res.status === 401) {
+      try { await getToken({ skipCache: true }); } catch { /* refresh failed → fall through to retry */ }
+      res = await fetch(input, init);
+      if (res.status === 401) setSessionExpired(true);
+    }
+    return res;
+  };
+  // Proactively refresh the token when she returns to the tab, so the FIRST action after a break
+  // succeeds without a stale-token 401 (the reported "come back and nothing works" case).
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible")
+        getToken({ skipCache: true }).catch(() => {});
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [getToken]);
   const [dateStr, setDateStr] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -207,7 +238,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`);
+        const res = await authFetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`);
         const d = await res.json();
         if (cancelled) return;
         hydratingRef.current = true;          // block the autosave the hydrate dispatch triggers
@@ -260,7 +291,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       const p = pendingSaveRef.current;
       if (!p) return;
       try {
-        const res = await fetch("/api/ethogram/session", {
+        const res = await authFetch("/api/ethogram/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(p),
@@ -396,7 +427,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
       // only a hint and is ignored on some phones). Falls back to `raw` if the browser can't decode.
       const { blob: upload, reencoded } = await toWav16kMono(raw);
       try {
-        const res = await fetch(`/api/ethogram/transcribe?space=${space}`, {
+        const res = await authFetch(`/api/ethogram/transcribe?space=${space}`, {
           method: "POST",
           headers: { "content-type": upload.type || "audio/webm" },
           body: upload,
@@ -485,7 +516,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
   async function loadPast() {
     setPastSessions(null);
     try {
-      const res = await fetch(`/api/ethogram/sessions?space=${space}`);
+      const res = await authFetch(`/api/ethogram/sessions?space=${space}`);
       const d = await res.json();
       setPastSessions(d.sessions ?? []);
     } catch {
@@ -505,7 +536,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     setSaveState("idle");
     setTranscripts({});
     try {
-      await fetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`, { method: "DELETE" });
+      await authFetch(`/api/ethogram/session?date=${dateStr}&ampm=${encodeURIComponent(ampm)}&space=${space}`, { method: "DELETE" });
       setNote("Cleared " + tabName() + " — the Google Sheet was not touched");
       if (showPast) loadPast();   // refresh the history list so the cleared day disappears
     } catch {
@@ -522,7 +553,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     setCommitting(true);
     setNote("Committing " + tabName() + "…");
     try {
-      const res = await fetch("/api/ethogram/commit", {
+      const res = await authFetch("/api/ethogram/commit", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -553,7 +584,7 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
     setCommitting(true);
     setNote("Replacing " + tabName() + "…");
     try {
-      const res = await fetch("/api/ethogram/commit", {
+      const res = await authFetch("/api/ethogram/commit", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tabName: tabName(), rows: buildRows(), sessionDate: dateStr, timeOfDay: ampm, replace: true }),
@@ -578,6 +609,12 @@ export default function EthogramClient({ commitEnabled }: { commitEnabled: boole
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 text-gray-100">
+      {sessionExpired && (
+        <div className="sticky top-0 z-50 mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-700 bg-amber-950/80 px-3 py-2.5 text-sm text-amber-100 backdrop-blur">
+          <span>⚠ Your session expired — sign in again to keep saving. Your data is safe.</span>
+          <button onClick={() => window.location.reload()} className="shrink-0 rounded-lg bg-amber-600 hover:bg-amber-500 px-3 py-1.5 font-semibold text-white">Sign in</button>
+        </div>
+      )}
       <h1 className="text-lg font-semibold mb-1">🐦 Ethogram Voice</h1>
       <p className="text-xs text-gray-400 mb-4">
         Pick a cell → record while you watch it → the counts fill in. Tap ＋ / − to fix anything.

@@ -362,3 +362,34 @@ one client-side decode+resample per clip (fine for these lengths). For **clips b
 would approach the cap again — the deferred escalation is a **storage relay** (client → Supabase
 Storage/Blob → function fetches it), which removes the request-body limit entirely. See
 `docs/ethogram/OVERVIEW.md` §9.
+
+---
+
+## ADR 0012 — Client auth auto-recovery (stale Clerk token → refresh-retry, then re-login)
+
+**Status:** Accepted (implemented 2026-08-07).
+
+**Context.** A researcher opened `/ethogram` (still *looking* logged in), tapped record, and it silently
+failed both morning and evening; a manual refresh revealed she was signed out, and re-login fixed it.
+Root cause (mapped): the page is a plain SPA with **no Clerk hooks and no auth gate** — auth relies
+entirely on `proxy.ts` (`clerkMiddleware` + `auth.protect()`). While the tab sits **backgrounded on a
+phone**, the short-lived Clerk **session token** goes stale (refresh timer frozen); the next
+`/api/ethogram/*` call 401s, but the client showed only a generic *"upload failed (401) — try again,"*
+and the page kept rendering as logged-in until a hard refresh re-ran the middleware and redirected to
+sign-in.
+
+**Decision.** Make the client **self-heal** instead of relying on a manual refresh:
+- **`authFetch` wrapper** (`EthogramClient.tsx`) around every user-facing `/api/ethogram/*` call: on a
+  401, force a fresh token via `useAuth().getToken({ skipCache: true })` and **retry once**. A stale
+  token heals **silently**.
+- **Proactive refresh** on `focus`/`visibilitychange` → `getToken({ skipCache: true })`, so the FIRST
+  action after returning to the tab already has a fresh token.
+- **Re-login fallback**: if the retry is *still* 401 (session genuinely gone), a sticky banner
+  ("session expired — sign in; your data is safe") whose button reloads → middleware routes to
+  sign-in → back to `/ethogram`. Replaces the cryptic 401 message.
+- Fire-and-forget calls (clientlog beacon, unmount-flush, transcript audit) stay raw.
+
+**Consequences.** The "come back and nothing works" trap is gone: usually invisible, worst case one
+clean tap. No server changes. Complementary (dashboard, not code): lengthen the Clerk **session
+lifetime** so full expiry is rarer. Verify on a real device with an actually-expired session — only
+the build is checkable locally.
