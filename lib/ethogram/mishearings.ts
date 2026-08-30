@@ -14,6 +14,7 @@ export const MISHEARINGS: Record<string, string> = {
   patching: "perching", patchings: "perching",
   peching: "perching", percing: "perching", percings: "perching",
   peaching: "perching", spercing: "perching", purching: "perching",
+  perishing: "perching", perishings: "perching",   // seen 2026-08-28
   // Pecking — only the tail word changes; any Environmental/Aggressive/Feather prefix is preserved
   packing: "pecking", packings: "pecking",
   // Foraging (free-range) — Whisper mangles it and the LLM otherwise mis-maps it to "Other
@@ -29,6 +30,10 @@ export const MISHEARINGS: Record<string, string> = {
 const PHRASES: Record<string, string> = {
   "floor aging": "foraging",
   "for aging": "foraging",
+  // Perching heard as two words (2026-08-28) — the "pet …" family is unambiguous.
+  "pet sings": "perching", "pet sing": "perching",
+  "pet seats": "perching", "pet seat": "perching",
+  "pet seeds": "perching", "pet sits": "perching",
 };
 
 const RE = new RegExp("\\b(" + Object.keys(MISHEARINGS).join("|") + ")\\b", "gi");

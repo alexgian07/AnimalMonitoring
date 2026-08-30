@@ -282,6 +282,17 @@ Raw transcripts stay stored, so a noisy clip can be **re-interpreted** later (im
 via `/api/ethogram/interpret` without re-recording. Heavier options (fine-tuning on the accumulating
 transcript→counts pairs; RAG) are noted but not worth it at this scale.
 
+**Update (2026-08-30) — pin Whisper to English (reverses the auto-detect part of this ADR).** This ADR
+originally dropped `language=en` so Whisper would auto-detect Greek. **Evidence says that was wrong:**
+across **588 recordings**, only 25 contained any Greek and **every one was hallucination or side-talk**
+(`Υπότιτλοι` subtitle spam, `Ναι`, `Ευχαριστώ`, `Πού είναι τα πουλιά?`) — **zero real Greek dictation**;
+all actual counts are spoken in English. Meanwhile auto-detect let Whisper drift into **Greek/Romanian
+hallucinations on noisy audio** (a whole clip came back Romanian on 2026-08-28), the day's main failure
+mode. So `transcribe` now sends **`language=en`** (override `GROQ_LANG=""` to restore auto-detect if a
+Greek-dictating researcher is ever added). The **LLM interpreter still accepts Greek** words/numbers —
+only the speech-to-text step is pinned. Also expanded the mishearing glossary with that day's new
+perching garbles (`perishing`, `pet sings/seats/…`).
+
 **Update (2026-08-02) — dropped-numbers at the Whisper layer.** A clip came back as a clean list of
 behaviour *names* with **no numbers**, so it counted nothing. Cause: the Whisper `prompt` (a
 style/vocab **bias**, not a filter) was a bare **name list**, which on an unclear clip nudged Whisper

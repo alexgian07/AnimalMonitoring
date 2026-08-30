@@ -39,7 +39,13 @@ export async function POST(req: NextRequest) {
   const form = new FormData();
   form.append("file", new Blob([buf], { type: ctype }), "audio." + ext);
   form.append("model", MODEL);
-  // no fixed language → Whisper auto-detects (supports Greek + English; ADR 0009)
+  // Pin Whisper to English. Evidence (588 clips): researchers dictate 100% in English; the only Greek
+  // that ever appeared was hallucination/side-talk ("Υπότιτλοι", "Ναι"), never data. Auto-detect (the
+  // old ADR-0009 behaviour) let Whisper drift into Greek/Romanian hallucinations on noisy audio, which
+  // was the main failure mode. `en` kills those and sharpens the English recognition. Override with
+  // GROQ_LANG="" to restore auto-detect if a Greek-dictating researcher is ever added.
+  const lang = process.env.GROQ_LANG ?? "en";
+  if (lang) form.append("language", lang);
   form.append("temperature", "0");
   form.append("prompt", VOCAB);
   form.append("response_format", "json");
