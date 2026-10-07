@@ -89,7 +89,7 @@ export async function upsertTab(spreadsheetId: string, tabName: string, rows: Ro
     });
     sheetId = added.data.replies?.[0]?.addSheet?.properties?.sheetId ?? undefined;
   } else {
-    await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tabName}'!A1:Z100` });
+    await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tabName}'!A1:AF100` });
   }
 
   await sheets.spreadsheets.values.update({
@@ -147,7 +147,7 @@ export async function replaceTab(spreadsheetId: string, tabName: string, rows: R
   const a1 = String(cur.data.values?.[0]?.[0] ?? "").trim().toUpperCase();
   if (a1 !== "OBSERV.") throw new TabShapeError(tabName);
 
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tabName}'!A1:Z100` });
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tabName}'!A1:AF100` });
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${tabName}'!A1`,

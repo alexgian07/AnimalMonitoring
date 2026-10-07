@@ -7,9 +7,10 @@ export const CATS = { gen: "general", disp: "display/reprod" } as const;
 
 export type Behaviour = { name: string; cat: keyof typeof CATS; syn: string[] };
 
-/* JULY tab (10-7) column order — 22 behaviours. NOTE: "scratch" alone is reserved
- * as an UNDO word, so Scratching uses -ing/-es forms only. */
-export const BEHAVIOURS: Behaviour[] = [
+/* JULY tab (10-7) column order — the shared CORE 22 behaviours. These keep indices 0–21 forever;
+ * space-specific extras (Foraging, Dancing) are appended AFTER, so existing columns never shift.
+ * NOTE: "scratch" alone is reserved as an UNDO word, so Scratching uses -ing/-es forms only. */
+const CORE: Behaviour[] = [
   { name: "Walking",  cat: "gen",  syn: ["walking", "walk", "walks"] },
   { name: "Standing", cat: "gen",  syn: ["standing", "stand", "stands"] },
   { name: "Sitting",  cat: "gen",  syn: ["sitting", "sit", "sits", "seated"] },
@@ -37,14 +38,24 @@ export const BEHAVIOURS: Behaviour[] = [
 /* Free-range-only extra behaviour: Foraging — ground/substrate-directed searching for food
  * (pecking + scratching at the pasture in search of food). Distinct from Eating (ingesting feed)
  * and Environmental Pecking (non-food object pecking); outdoor birds do it heavily, indoor birds
- * barely, so it is tracked for the free-range form ONLY. Appended AFTER the shared 22 so inside
- * grids/sheet columns keep their indices; free-range grids/sheets get this as a 23rd column. */
+ * barely, so it is tracked for the free-range form ONLY (index 22). */
 export const FORAGING: Behaviour = {
   name: "Foraging", cat: "gen", syn: ["foraging", "forage", "forages", "foraged"],
 };
-export const FREE_BEHAVIOURS: Behaviour[] = [...BEHAVIOURS, FORAGING];
 
-/* Behaviour list for an animal space: inside = the shared 22; free-range = 22 + Foraging (23). */
+/* Dancing — a display/courtship behaviour tracked in BOTH spaces (added 2026-10-07). Appended LAST
+ * in each space's list so existing column indices never shift: inside index 22; free-range index 23
+ * (i.e. AFTER Foraging). New Sheet tabs get a Dancing column; older tabs/grids pad to 0. */
+export const DANCING: Behaviour = {
+  name: "Dancing", cat: "disp", syn: ["dancing", "dance", "dances", "danced"],
+};
+
+/* Inside = the shared 22 core + Dancing (23). */
+export const BEHAVIOURS: Behaviour[] = [...CORE, DANCING];
+/* Free-range = core 22 + Foraging (index 22) + Dancing (index 23) = 24. */
+export const FREE_BEHAVIOURS: Behaviour[] = [...CORE, FORAGING, DANCING];
+
+/* Behaviour list for an animal space: inside = core+Dancing (23); free-range = core+Foraging+Dancing (24). */
 export function behavioursFor(space?: string): Behaviour[] {
   return space === "free_range" ? FREE_BEHAVIOURS : BEHAVIOURS;
 }

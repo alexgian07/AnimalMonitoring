@@ -34,7 +34,7 @@ One **session** = one day + one time-of-day (Πρωί/morning `Π` or Μεσημ
 tab** in the Google Sheet, named like `10-7 Π`. A session is **twice a day, ~2 days/week**.
 
 Each tab is **48 rows**: an `OBSERV.` column running **1→6**, and under each observation all
-**8 cells** `K1…K8`. Columns are `OBSERV. | Cell | <22 behaviours> | Σ`.
+**8 cells** `K1…K8`. Columns are `OBSERV. | Cell | <behaviours> | Σ` (inside behaviours = 23 incl. Dancing; see §behaviours below).
 
 ```
 OBSERV 1 → K1 K2 K3 K4 K5 K6 K7 K8
@@ -51,9 +51,15 @@ Eating, Drinking, Grooming, Preening, Env. Pecking, Agr.Pecking, Feather Pecking
 Dust bathing, Scratching, Flapping, Stretching, Perching, Strutting, Tail fanning, Wing dragging,
 Gobbling, Other vocalisation. (An earlier May template had only 18 — we target July.)
 
-**Behaviour set is space-specific** (ADR 0010): inside uses these **22**; **free-range adds a 23rd,
-`Foraging`** (`FREE_BEHAVIOURS` / `behavioursFor(space)` in `parser.ts`) — outdoor birds forage on
-pasture, indoor birds don't. Foraging is appended last, so inside column indices never move.
+**Behaviour set is space-specific** (ADR 0010, 0013): a shared **CORE 22** (indices 0–21), plus extras
+appended **last** so existing columns never shift (`CORE` / `BEHAVIOURS` / `FREE_BEHAVIOURS` /
+`behavioursFor(space)` in `parser.ts`):
+- **Inside = 23:** core 22 + **`Dancing`** (index 22).
+- **Free-range = 24:** core 22 + **`Foraging`** (index 22, outdoor-only) + **`Dancing`** (index 23).
+
+`Dancing` (display/courtship, added 2026-10-07) is tracked in both spaces; `Foraging` free-range only.
+New Sheet tabs carry the new column(s); older tabs/grids just pad to 0. Inside now runs to col Z (Σ),
+free-range to col Z (Dancing) — the `values.clear` range was widened to `A1:AF100` for headroom.
 
 ---
 

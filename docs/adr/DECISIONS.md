@@ -225,7 +225,7 @@ hidden (it's cell-shaped); the per-observation list + Copy/CSV cover it.
 **Consequences.** Two independent checks (Supabase ownership + A1 shape) must both pass before any
 overwrite, so a foreign/manual tab is never clobbered from the app. The correction workflow is now
 in-app. The Sheet remains the system of record and the authority on whether a commit can proceed;
-Supabase only *gates the Replace offer*. `values.clear` covers `A1:Z100`, so a replaced tab can't keep
+Supabase only *gates the Replace offer*. `values.clear` covers `A1:AF100`, so a replaced tab can't keep
 stale cells beyond the 49×~25 grid.
 
 ---
@@ -326,7 +326,7 @@ indoors, so it belongs to the **free-range form only**.
   transcription can return Foraging. `/api/ethogram/transcribe?space=` and `/api/ethogram/interpret`
   pass `space` through.
 - **Sheet:** free-range day tab (`freeRangeDayRows`) uses `FREE_BEHAVIOURS` → a **23rd column,
-  Foraging**, at the end (25 cols total, still within the `A1:Z100` clear range).
+  Foraging**, at the end. (A later ADR 0013 adds Dancing and widens the clear range to `A1:AF100`.)
 - **Backfill:** today's free-range morning session had Foraging injected into the stored grid (index 22)
   from its transcripts; the tab is corrected by re-committing that day from the app (owner-only).
 
@@ -404,3 +404,35 @@ sign-in.
 clean tap. No server changes. Complementary (dashboard, not code): lengthen the Clerk **session
 lifetime** so full expiry is rarer. Verify on a real device with an actually-expired session — only
 the build is checkable locally.
+
+---
+
+## ADR 0013 — Add **Dancing** behaviour (both spaces); behaviour lists restructured around a CORE
+
+**Status:** Accepted (implemented 2026-10-07).
+
+**Context.** After a month of smooth use, the researchers want a new display/courtship behaviour,
+**Dancing**, recorded in **both** inside and free-range (and in the Sheet). Behaviour columns are
+**positional**, so inserting one mid-list would shift every later index and misalign all existing
+stored grids and committed Sheet tabs.
+
+**Decision.** Append-only, and refactor `parser.ts` around a shared base so the pattern is explicit:
+- `CORE` = the original **22** behaviours (indices 0–21, frozen forever).
+- `BEHAVIOURS` (inside) = `[...CORE, DANCING]` → **23**, Dancing at **22**.
+- `FREE_BEHAVIOURS` = `[...CORE, FORAGING, DANCING]` → **24**, Foraging stays **22**, Dancing **23**.
+  (Foraging's index is unchanged, so existing free-range data/tabs stay aligned.)
+- Everything on the primary path reads `behavioursFor(space)` dynamically (client grid, LLM enum,
+  `freeRangeDayRows`, `normalizeGrid`/`emptyGrid` via `behCount`), so columns/padding update
+  automatically; older grids pad Dancing (and Foraging) to 0 on load.
+- The hardcoded copies in `scripts/admin-recommit.mjs` were updated the same way, and its row slices
+  made length-driven (`BEHAVIOURS.length` / `FREE_BEHAVIOURS.length`) so they can't drift again.
+- Inside now runs to column **Z** (Σ) and free-range to **Z** (Dancing); the `values.clear` range was
+  widened `A1:Z100` → **`A1:AF100`** for headroom.
+
+**Consequences.** New committed tabs get a Dancing column; historical tabs are untouched (Dancing = 0
+for the past — it wasn't recorded then). Inside index of Dancing (22) differs from free-range (23);
+that's fine since every path is space-aware (same as Foraging). Caveat: the deterministic *fallback*
+parser (`parseToOps`, used only if the LLM call fails) indexes via `BEHAVIOURS`, so on a free-range
+clip it would map "dancing" to inside-index 22 — a known, pre-existing fallback imprecision (it
+already ignores Foraging); the LLM primary path is correct. Category set to `disp` (display/reprod);
+trivially changeable if the study classifies it differently.

@@ -31,14 +31,15 @@ function loadEnv(path) {
 }
 loadEnv(fileURLToPath(new URL("../.env.local", import.meta.url)));
 
-// must match lib/ethogram/parser.ts + the existing tabs exactly
-const BEHAVIOURS = [
+// must match lib/ethogram/parser.ts + the existing tabs exactly (core 22, then appended extras)
+const CORE = [
   "Walking", "Standing", "Sitting", "Running", "Eating", "Drinking", "Grooming", "Preening",
   "Env. Pecking", "Agr.Pecking", "Feather Pecking", "Fighting", "Dust bathing", "Scratching",
   "Flapping", "Stretching", "Perching", "Strutting", "Tail fanning", "Wing dragging", "Gobbling",
   "Other vocalisation",
 ];
-const FREE_BEHAVIOURS = [...BEHAVIOURS, "Foraging"]; // free-range adds a 23rd column
+const BEHAVIOURS = [...CORE, "Dancing"];                 // inside: 23
+const FREE_BEHAVIOURS = [...CORE, "Foraging", "Dancing"]; // free-range: 24 (Foraging@22, Dancing@23)
 const CELLS = ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"];
 
 function insideRows(grid) {
@@ -47,7 +48,7 @@ function insideRows(grid) {
     for (let c = 0; c < 8; c++) {
       const counts = grid?.[o]?.[c] ?? [];
       const sum = counts.reduce((a, b) => a + (b || 0), 0);
-      rows.push([o + 1, CELLS[c], ...counts.slice(0, 22).map((v) => (v ? v : "")), sum || ""]);
+      rows.push([o + 1, CELLS[c], ...counts.slice(0, BEHAVIOURS.length).map((v) => (v ? v : "")), sum || ""]);
     }
   return rows;
 }
@@ -57,7 +58,7 @@ function freeRangeDayRows(morning, lunch) {
   const block = (grid, label) => {
     for (let o = 0; o < 6; o++) {
       const counts = grid?.[o]?.[0] ?? FREE_BEHAVIOURS.map(() => 0);
-      rows.push([o === 0 ? label : "", o + 1, ...counts.slice(0, 23).map((v) => (v ? v : ""))]);
+      rows.push([o === 0 ? label : "", o + 1, ...counts.slice(0, FREE_BEHAVIOURS.length).map((v) => (v ? v : ""))]);
     }
   };
   block(morning, "ΠΡΩΙ");
@@ -82,7 +83,7 @@ async function writeTab(sheets, spreadsheetId, tab, rows, guardCol) {
   } else {
     const cur = (await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${tab}'!${guardCol}1` })).data.values?.[0]?.[0];
     if (String(cur ?? "").trim().toUpperCase() !== "OBSERV.") throw new Error(`${guardCol}1 of "${tab}" is "${cur}", not "OBSERV." — refusing to overwrite`);
-    await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tab}'!A1:Z100` });
+    await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tab}'!A1:AF100` });
   }
   await sheets.spreadsheets.values.update({ spreadsheetId, range: `'${tab}'!A1`, valueInputOption: "RAW", requestBody: { values: rows } });
   const stamp = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
