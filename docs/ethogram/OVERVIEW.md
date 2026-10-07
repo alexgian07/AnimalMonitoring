@@ -34,7 +34,7 @@ One **session** = one day + one time-of-day (Πρωί/morning `Π` or Μεσημ
 tab** in the Google Sheet, named like `10-7 Π`. A session is **twice a day, ~2 days/week**.
 
 Each tab is **48 rows**: an `OBSERV.` column running **1→6**, and under each observation all
-**8 cells** `K1…K8`. Columns are `OBSERV. | Cell | <behaviours> | Σ` (inside behaviours = 23 incl. Dancing; see §behaviours below).
+**8 cells** `K1…K8`. Columns are `OBSERV. | Cell | <behaviours> | Σ` (inside behaviours = 24 incl. Dancing + Mating; see §behaviours below).
 
 ```
 OBSERV 1 → K1 K2 K3 K4 K5 K6 K7 K8
@@ -54,12 +54,13 @@ Gobbling, Other vocalisation. (An earlier May template had only 18 — we target
 **Behaviour set is space-specific** (ADR 0010, 0013): a shared **CORE 22** (indices 0–21), plus extras
 appended **last** so existing columns never shift (`CORE` / `BEHAVIOURS` / `FREE_BEHAVIOURS` /
 `behavioursFor(space)` in `parser.ts`):
-- **Inside = 23:** core 22 + **`Dancing`** (index 22).
-- **Free-range = 24:** core 22 + **`Foraging`** (index 22, outdoor-only) + **`Dancing`** (index 23).
+- **Inside = 24:** core 22 + **`Dancing`** (22) + **`Mating`** (23).
+- **Free-range = 25:** core 22 + **`Foraging`** (22, outdoor-only) + **`Dancing`** (23) + **`Mating`** (24).
 
-`Dancing` (display/courtship, added 2026-10-07) is tracked in both spaces; `Foraging` free-range only.
-New Sheet tabs carry the new column(s); older tabs/grids just pad to 0. Inside now runs to col Z (Σ),
-free-range to col Z (Dancing) — the `values.clear` range was widened to `A1:AF100` for headroom.
+`Dancing` and `Mating` (display/reprod, added 2026-10-07) are tracked in both spaces; `Foraging`
+free-range only. New Sheet tabs carry the new column(s); older tabs/grids just pad to 0. Inside now
+runs to col **AA** (Σ), free-range to **AA** (Mating) — the `values.clear` range was widened to
+`A1:AF100` for headroom.
 
 ---
 

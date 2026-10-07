@@ -407,7 +407,7 @@ the build is checkable locally.
 
 ---
 
-## ADR 0013 — Add **Dancing** behaviour (both spaces); behaviour lists restructured around a CORE
+## ADR 0013 — Add **Dancing** (and **Mating**) behaviours (both spaces); behaviour lists restructured around a CORE
 
 **Status:** Accepted (implemented 2026-10-07).
 
@@ -436,3 +436,9 @@ parser (`parseToOps`, used only if the LLM call fails) indexes via `BEHAVIOURS`,
 clip it would map "dancing" to inside-index 22 — a known, pre-existing fallback imprecision (it
 already ignores Foraging); the LLM primary path is correct. Category set to `disp` (display/reprod);
 trivially changeable if the study classifies it differently.
+
+**Update (same day) — Mating added too.** Mating season started, so **`Mating`** was appended right
+after Dancing by the identical pattern: `BEHAVIOURS = [...CORE, DANCING, MATING]` (inside **24**,
+Mating index 23); `FREE_BEHAVIOURS = [...CORE, FORAGING, DANCING, MATING]` (free-range **25**, Mating
+index 24). This pushes the inside **Σ to column AA** and free-range **Mating to AA** — both covered by
+the already-widened `A1:AF100` clear range. Same display/reprod category + fallback caveat as Dancing.

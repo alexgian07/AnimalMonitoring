@@ -49,13 +49,18 @@ export const FORAGING: Behaviour = {
 export const DANCING: Behaviour = {
   name: "Dancing", cat: "disp", syn: ["dancing", "dance", "dances", "danced"],
 };
+/* Mating — reproductive behaviour, tracked in BOTH spaces (added 2026-10-07, mating season). Appended
+ * after Dancing so nothing shifts: inside index 23; free-range index 24. */
+export const MATING: Behaviour = {
+  name: "Mating", cat: "disp", syn: ["mating", "mate", "mates", "mated"],
+};
 
-/* Inside = the shared 22 core + Dancing (23). */
-export const BEHAVIOURS: Behaviour[] = [...CORE, DANCING];
-/* Free-range = core 22 + Foraging (index 22) + Dancing (index 23) = 24. */
-export const FREE_BEHAVIOURS: Behaviour[] = [...CORE, FORAGING, DANCING];
+/* Inside = core 22 + Dancing (22) + Mating (23) = 24. */
+export const BEHAVIOURS: Behaviour[] = [...CORE, DANCING, MATING];
+/* Free-range = core 22 + Foraging (22) + Dancing (23) + Mating (24) = 25. */
+export const FREE_BEHAVIOURS: Behaviour[] = [...CORE, FORAGING, DANCING, MATING];
 
-/* Behaviour list for an animal space: inside = core+Dancing (23); free-range = core+Foraging+Dancing (24). */
+/* Behaviour list for an animal space: inside = core+Dancing+Mating (24); free-range = +Foraging too (25). */
 export function behavioursFor(space?: string): Behaviour[] {
   return space === "free_range" ? FREE_BEHAVIOURS : BEHAVIOURS;
 }

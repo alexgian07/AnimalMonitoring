@@ -38,8 +38,8 @@ const CORE = [
   "Flapping", "Stretching", "Perching", "Strutting", "Tail fanning", "Wing dragging", "Gobbling",
   "Other vocalisation",
 ];
-const BEHAVIOURS = [...CORE, "Dancing"];                 // inside: 23
-const FREE_BEHAVIOURS = [...CORE, "Foraging", "Dancing"]; // free-range: 24 (Foraging@22, Dancing@23)
+const BEHAVIOURS = [...CORE, "Dancing", "Mating"];                 // inside: 24
+const FREE_BEHAVIOURS = [...CORE, "Foraging", "Dancing", "Mating"]; // free-range: 25 (Foraging@22, Dancing@23, Mating@24)
 const CELLS = ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"];
 
 function insideRows(grid) {
